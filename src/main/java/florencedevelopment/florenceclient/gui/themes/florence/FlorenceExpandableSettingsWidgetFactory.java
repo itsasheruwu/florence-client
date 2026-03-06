@@ -1,0 +1,511 @@
+/*
+ * This file is part of the Florence Client distribution.
+ * Copyright (c) Florence Development.
+ */
+
+package florencedevelopment.florenceclient.gui.themes.florence;
+
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import florencedevelopment.florenceclient.gui.DefaultSettingsWidgetFactory;
+import florencedevelopment.florenceclient.gui.GuiTheme;
+import florencedevelopment.florenceclient.gui.WidgetScreen;
+import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
+import florencedevelopment.florenceclient.gui.screens.settings.*;
+import florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceLabel;
+import florencedevelopment.florenceclient.gui.utils.Cell;
+import florencedevelopment.florenceclient.gui.utils.CharFilter;
+import florencedevelopment.florenceclient.gui.widgets.*;
+import florencedevelopment.florenceclient.gui.widgets.containers.*;
+import florencedevelopment.florenceclient.gui.widgets.input.*;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WButton;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WCheckbox;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WMinus;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WPlus;
+import florencedevelopment.florenceclient.settings.*;
+import florencedevelopment.florenceclient.utils.Utils;
+import florencedevelopment.florenceclient.utils.render.color.SettingColor;
+import net.minecraft.client.resource.language.I18n;
+import org.apache.commons.lang3.Strings;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import static florencedevelopment.florenceclient.FlorenceClient.mc;
+
+public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidgetFactory {
+    private static final SettingColor WHITE = new SettingColor();
+
+    public FlorenceExpandableSettingsWidgetFactory(GuiTheme theme) {
+        super(theme);
+        
+        // Override all factory methods to remove reset buttons
+        factories.put(BoolSetting.class, (table, setting) -> boolWNoReset(table, (BoolSetting) setting));
+        factories.put(IntSetting.class, (table, setting) -> intWNoReset(table, (IntSetting) setting));
+        factories.put(DoubleSetting.class, (table, setting) -> doubleWNoReset(table, (DoubleSetting) setting));
+        factories.put(StringSetting.class, (table, setting) -> stringWNoReset(table, (StringSetting) setting));
+        factories.put(EnumSetting.class, (table, setting) -> enumWNoReset(table, (EnumSetting<? extends Enum<?>>) setting));
+        factories.put(ProvidedStringSetting.class, (table, setting) -> providedStringWNoReset(table, (ProvidedStringSetting) setting));
+        factories.put(GenericSetting.class, (table, setting) -> genericWNoReset(table, (GenericSetting<?>) setting));
+        factories.put(ColorSetting.class, (table, setting) -> colorWNoReset(table, (ColorSetting) setting));
+        factories.put(KeybindSetting.class, (table, setting) -> keybindWNoReset(table, (KeybindSetting) setting));
+        factories.put(BlockSetting.class, (table, setting) -> blockWNoReset(table, (BlockSetting) setting));
+        factories.put(BlockListSetting.class, (table, setting) -> blockListWNoReset(table, (BlockListSetting) setting));
+        factories.put(ItemSetting.class, (table, setting) -> itemWNoReset(table, (ItemSetting) setting));
+        factories.put(ItemListSetting.class, (table, setting) -> itemListWNoReset(table, (ItemListSetting) setting));
+        factories.put(EntityTypeListSetting.class, (table, setting) -> entityTypeListWNoReset(table, (EntityTypeListSetting) setting));
+        factories.put(EnchantmentListSetting.class, (table, setting) -> enchantmentListWNoReset(table, (EnchantmentListSetting) setting));
+        factories.put(ModuleListSetting.class, (table, setting) -> moduleListWNoReset(table, (ModuleListSetting) setting));
+        factories.put(PacketListSetting.class, (table, setting) -> packetListWNoReset(table, (PacketListSetting) setting));
+        factories.put(ParticleTypeListSetting.class, (table, setting) -> particleTypeListWNoReset(table, (ParticleTypeListSetting) setting));
+        factories.put(SoundEventListSetting.class, (table, setting) -> soundEventListWNoReset(table, (SoundEventListSetting) setting));
+        factories.put(StatusEffectAmplifierMapSetting.class, (table, setting) -> statusEffectAmplifierMapWNoReset(table, (StatusEffectAmplifierMapSetting) setting));
+        factories.put(StatusEffectListSetting.class, (table, setting) -> statusEffectListWNoReset(table, (StatusEffectListSetting) setting));
+        factories.put(StorageBlockListSetting.class, (table, setting) -> storageBlockListWNoReset(table, (StorageBlockListSetting) setting));
+        factories.put(ScreenHandlerListSetting.class, (table, setting) -> screenHandlerListWNoReset(table, (ScreenHandlerListSetting) setting));
+        factories.put(BlockDataSetting.class, (table, setting) -> blockDataWNoReset(table, (BlockDataSetting<?>) setting));
+        factories.put(PotionSetting.class, (table, setting) -> potionWNoReset(table, (PotionSetting) setting));
+        factories.put(StringListSetting.class, (table, setting) -> stringListWNoReset(table, (StringListSetting) setting));
+        factories.put(BlockPosSetting.class, (table, setting) -> blockPosWNoReset(table, (BlockPosSetting) setting));
+        factories.put(ColorListSetting.class, (table, setting) -> colorListWNoReset(table, (ColorListSetting) setting));
+        factories.put(FontFaceSetting.class, (table, setting) -> fontWNoReset(table, (FontFaceSetting) setting));
+        factories.put(Vector3dSetting.class, (table, setting) -> vector3dWNoReset(table, (Vector3dSetting) setting));
+    }
+
+    @Override
+    public WWidget create(GuiTheme theme, Settings settings, String filter) {
+        WVerticalList list = theme.verticalList();
+        // Reduce spacing for compact layout
+        list.spacing = 1.5; // vs 3 default
+
+        List<RemoveInfo> removeInfoList = new ArrayList<>();
+
+        // Add all settings with compact spacing
+        for (SettingGroup group : settings.groups) {
+            groupCompact(list, group, filter, removeInfoList);
+        }
+
+        // Calculate width and set it as minimum width
+        list.calculateSize();
+        list.minWidth = list.width;
+
+        // Remove hidden settings
+        for (RemoveInfo removeInfo : removeInfoList) {
+            removeInfo.remove(list);
+        }
+
+        return list;
+    }
+
+    @Override
+    protected double settingTitleTopMargin() {
+        return 2; // vs 6 default - more compact
+    }
+
+    // Compact version of group() method with reduced spacing
+    private void groupCompact(WVerticalList list, SettingGroup group, String filter, List<RemoveInfo> removeInfoList) {
+        WSection section = list.add(theme.section(group.name, group.sectionExpanded)).expandX().widget();
+        section.action = () -> group.sectionExpanded = section.isExpanded();
+
+        WTable table = section.add(theme.table()).expandX().widget();
+        // Reduce table spacing for compact layout
+        table.verticalSpacing = 1.5; // vs 3 default
+        table.horizontalSpacing = 2; // vs 3 default
+
+        RemoveInfo removeInfo = null;
+
+        for (Setting<?> setting : group) {
+            if (!Strings.CI.contains(setting.title, filter)) continue;
+
+            boolean visible = setting.isVisible();
+            setting.lastWasVisible = visible;
+            if (!visible) {
+                if (removeInfo == null) removeInfo = new RemoveInfo(section, table);
+                removeInfo.markRowForRemoval();
+            }
+
+            table.add(theme.label(setting.title)).top().marginTop(settingTitleTopMargin()).widget().tooltip = setting.description;
+
+            Factory factory = getFactory(setting.getClass());
+            if (factory != null) factory.create(table, setting);
+
+            table.row();
+        }
+
+        if (removeInfo != null) removeInfoList.add(removeInfo);
+    }
+
+    // Helper class for removing hidden settings
+    private static class RemoveInfo {
+        private final WSection section;
+        private final WTable table;
+        private final IntList rowIds = new IntArrayList();
+
+        public RemoveInfo(WSection section, WTable table) {
+            this.section = section;
+            this.table = table;
+        }
+
+        public void markRowForRemoval() {
+            rowIds.add(table.rowI());
+        }
+
+        public void remove(WVerticalList list) {
+            for (int i = 0; i < rowIds.size(); i++) {
+                table.removeRow(rowIds.getInt(i) - i);
+            }
+
+            if (table.cells.isEmpty()) list.cells.removeIf(cell -> cell.widget() == section);
+        }
+    }
+
+    // Settings without reset buttons
+
+    private void boolWNoReset(WTable table, BoolSetting setting) {
+        WCheckbox checkbox = table.add(theme.checkbox(setting.get())).expandCellX().widget();
+        checkbox.action = () -> setting.set(checkbox.checked);
+        // No reset button
+    }
+
+    private void intWNoReset(WTable table, IntSetting setting) {
+        WIntEdit edit = table.add(theme.intEdit(setting.get(), setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.noSlider)).expandX().widget();
+
+        edit.action = () -> {
+            if (!setting.set(edit.get())) edit.set(setting.get());
+        };
+        // No reset button
+    }
+
+    private void doubleWNoReset(WTable table, DoubleSetting setting) {
+        WDoubleEdit edit = theme.doubleEdit(setting.get(), setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.decimalPlaces, setting.noSlider);
+        table.add(edit).expandX();
+
+        Runnable action = () -> {
+            if (!setting.set(edit.get())) edit.set(setting.get());
+        };
+
+        if (setting.onSliderRelease) edit.actionOnRelease = action;
+        else edit.action = action;
+        // No reset button
+    }
+
+    private void stringWNoReset(WTable table, StringSetting setting) {
+        CharFilter filter = setting.filter == null ? (text, c) -> true : setting.filter;
+        Cell<WTextBox> cell = table.add(theme.textBox(setting.get(), setting.placeholder, filter, setting.renderer));
+        if (setting.wide) cell.minWidth(Utils.getWindowWidth() - Utils.getWindowWidth() / 4.0);
+
+        WTextBox textBox = cell.expandX().widget();
+        textBox.action = () -> setting.set(textBox.get());
+        // No reset button
+    }
+
+    private void stringListWNoReset(WTable table, StringListSetting setting) {
+        WTable wtable = table.add(theme.table()).expandX().widget();
+        // Apply compact spacing to nested table
+        wtable.verticalSpacing = 1;
+        wtable.horizontalSpacing = 2;
+        StringListSetting.fillTable(theme, wtable, setting);
+    }
+
+    private <T extends Enum<?>> void enumWNoReset(WTable table, EnumSetting<T> setting) {
+        WDropdown<T> dropdown = table.add(theme.dropdown(setting.get())).expandCellX().widget();
+        dropdown.action = () -> setting.set(dropdown.get());
+        // No reset button
+    }
+
+    private void providedStringWNoReset(WTable table, ProvidedStringSetting setting) {
+        WDropdown<String> dropdown = table.add(theme.dropdown(setting.supplier.get(), setting.get())).expandCellX().widget();
+        dropdown.action = () -> setting.set(dropdown.get());
+        // No reset button
+    }
+
+    private void genericWNoReset(WTable table, GenericSetting<?> setting) {
+        WButton edit = table.add(theme.button(GuiRenderer.EDIT)).widget();
+        edit.action = () -> mc.setScreen(setting.createScreen(theme));
+        // No reset button
+    }
+
+    private void colorWNoReset(WTable table, ColorSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+
+        WQuad quad = list.add(theme.quad(setting.get())).widget();
+
+        WButton edit = list.add(theme.button(GuiRenderer.EDIT)).widget();
+        edit.action = () -> mc.setScreen(new ColorSettingScreen(theme, setting));
+        // No reset button
+    }
+
+    private void keybindWNoReset(WTable table, KeybindSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+
+        WKeybind keybind = list.add(theme.keybind(setting.get(), setting.getDefaultValue())).expandX().widget();
+        keybind.action = setting::onChanged;
+        setting.widget = keybind;
+        // No reset button - keybind widget has its own reset functionality
+    }
+
+    private void blockWNoReset(WTable table, BlockSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+
+        WItem item = list.add(theme.item(setting.get().asItem().getDefaultStack())).widget();
+
+        WButton select = list.add(theme.button("Select")).widget();
+        select.action = () -> {
+            BlockSettingScreen screen = new BlockSettingScreen(theme, setting);
+            screen.onClosed(() -> item.set(setting.get().asItem().getDefaultStack()));
+
+            mc.setScreen(screen);
+        };
+        // No reset button
+    }
+
+    private void blockPosWNoReset(WTable table, BlockPosSetting setting) {
+        WBlockPosEdit edit = table.add(theme.blockPosEdit(setting.get())).expandX().widget();
+
+        edit.actionOnRelease = () -> {
+            if (!setting.set(edit.get())) edit.set(setting.get());
+        };
+        // No reset button
+    }
+
+    private void blockListWNoReset(WTable table, BlockListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new BlockListSettingScreen(theme, setting)));
+    }
+
+    private void itemWNoReset(WTable table, ItemSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+
+        WItem item = list.add(theme.item(setting.get().asItem().getDefaultStack())).widget();
+
+        WButton select = list.add(theme.button("Select")).widget();
+        select.action = () -> {
+            ItemSettingScreen screen = new ItemSettingScreen(theme, setting);
+            screen.onClosed(() -> item.set(setting.get().getDefaultStack()));
+
+            mc.setScreen(screen);
+        };
+        // No reset button
+    }
+
+    private void itemListWNoReset(WTable table, ItemListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new ItemListSettingScreen(theme, setting)));
+    }
+
+    private void entityTypeListWNoReset(WTable table, EntityTypeListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new EntityTypeListSettingScreen(theme, setting)));
+    }
+
+    private void enchantmentListWNoReset(WTable table, EnchantmentListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new EnchantmentListSettingScreen(theme, setting)));
+    }
+
+    private void moduleListWNoReset(WTable table, ModuleListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new ModuleListSettingScreen(theme, setting)));
+    }
+
+    private void packetListWNoReset(WTable table, PacketListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new PacketBoolSettingScreen(theme, setting)));
+    }
+
+    private void particleTypeListWNoReset(WTable table, ParticleTypeListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new ParticleTypeListSettingScreen(theme, setting)));
+    }
+
+    private void soundEventListWNoReset(WTable table, SoundEventListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new SoundEventListSettingScreen(theme, setting)));
+    }
+
+    private void statusEffectAmplifierMapWNoReset(WTable table, StatusEffectAmplifierMapSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new StatusEffectAmplifierMapSettingScreen(theme, setting)));
+    }
+
+    private void statusEffectListWNoReset(WTable table, StatusEffectListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new StatusEffectListSettingScreen(theme, setting)));
+    }
+
+    private void storageBlockListWNoReset(WTable table, StorageBlockListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new StorageBlockListSettingScreen(theme, setting)));
+    }
+
+    private void screenHandlerListWNoReset(WTable table, ScreenHandlerListSetting setting) {
+        selectWNoReset(table, setting, () -> mc.setScreen(new ScreenHandlerSettingScreen(theme, setting)));
+    }
+
+    private void blockDataWNoReset(WTable table, BlockDataSetting<?> setting) {
+        WButton button = table.add(theme.button(GuiRenderer.EDIT)).expandCellX().widget();
+        button.action = () -> mc.setScreen(new BlockDataSettingScreen<>(theme, setting));
+        // No reset button
+    }
+
+    private void potionWNoReset(WTable table, PotionSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+        WItemWithLabel item = list.add(theme.itemWithLabel(setting.get().potion, I18n.translate(setting.get().potion.getItem().getTranslationKey()))).widget();
+
+        WButton button = list.add(theme.button("Select")).expandCellX().widget();
+        button.action = () -> {
+            WidgetScreen screen = new PotionSettingScreen(theme, setting);
+            screen.onClosed(() -> item.set(setting.get().potion));
+
+            mc.setScreen(screen);
+        };
+        // No reset button
+    }
+
+    private void fontWNoReset(WTable table, FontFaceSetting setting) {
+        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
+        WLabel label = list.add(theme.label(setting.get().info.family())).widget();
+
+        WButton button = list.add(theme.button("Select")).expandCellX().widget();
+        button.action = () -> {
+            WidgetScreen screen = new FontFaceSettingScreen(theme, setting);
+            screen.onClosed(() -> label.set(setting.get().info.family()));
+
+            mc.setScreen(screen);
+        };
+        // No reset button
+    }
+
+    private void colorListWNoReset(WTable table, ColorListSetting setting) {
+        WTable tab = table.add(theme.table()).expandX().widget();
+        // Apply compact spacing
+        tab.verticalSpacing = 1;
+        tab.horizontalSpacing = 2;
+        
+        WTable t = tab.add(theme.table()).expandX().widget();
+        // Apply compact spacing to nested table
+        t.verticalSpacing = 1;
+        t.horizontalSpacing = 2;
+        tab.row();
+
+        colorListWFillNoReset(t, setting);
+
+        WPlus add = tab.add(theme.plus()).expandCellX().widget();
+        add.action = () -> {
+            setting.get().add(new SettingColor());
+            setting.onChanged();
+
+            t.clear();
+            colorListWFillNoReset(t, setting);
+        };
+        // No reset button
+    }
+
+    private void colorListWFillNoReset(WTable t, ColorListSetting setting) {
+        int i = 0;
+        for (SettingColor color : setting.get()) {
+            int _i = i;
+
+            t.add(theme.label(i + ":"));
+
+            t.add(theme.quad(color)).widget();
+
+            WButton edit = t.add(theme.button(GuiRenderer.EDIT)).widget();
+            edit.action = () -> {
+                SettingColor defaultValue = WHITE;
+                if (_i < setting.getDefaultValue().size()) defaultValue = setting.getDefaultValue().get(_i);
+
+                ColorSetting set = new ColorSetting(setting.name, setting.description, defaultValue, settingColor -> {
+                    setting.get().get(_i).set(settingColor);
+                    setting.onChanged();
+                }, null, null);
+                set.set(setting.get().get(_i));
+                mc.setScreen(new ColorSettingScreen(theme, set));
+            };
+
+            WMinus remove = t.add(theme.minus()).expandCellX().right().widget();
+            remove.action = () -> {
+                setting.get().remove(_i);
+                setting.onChanged();
+
+                t.clear();
+                colorListWFillNoReset(t, setting);
+            };
+
+            t.row();
+            i++;
+        }
+    }
+
+    private void vector3dWNoReset(WTable table, Vector3dSetting setting) {
+        WTable internal = table.add(theme.table()).expandX().widget();
+        // Apply compact spacing to nested table
+        internal.verticalSpacing = 1;
+        internal.horizontalSpacing = 2;
+
+        WDoubleEdit x = addVectorComponentNoReset(internal, "X", setting.get().x, val -> setting.get().x = val, setting);
+        WDoubleEdit y = addVectorComponentNoReset(internal, "Y", setting.get().y, val -> setting.get().y = val, setting);
+        WDoubleEdit z = addVectorComponentNoReset(internal, "Z", setting.get().z, val -> setting.get().z = val, setting);
+        // No reset button
+    }
+
+    private WDoubleEdit addVectorComponentNoReset(WTable table, String label, double value, Consumer<Double> update, Vector3dSetting setting) {
+        table.add(theme.label(label + ": "));
+
+        WDoubleEdit component = table.add(theme.doubleEdit(value, setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.decimalPlaces, setting.noSlider)).expandX().widget();
+        if (setting.onSliderRelease) {
+            component.actionOnRelease = () -> {
+                update.accept(component.get());
+                setting.onChanged();
+            };
+        } else {
+            component.action = () -> {
+                update.accept(component.get());
+                setting.onChanged();
+            };
+        }
+
+        table.row();
+
+        return component;
+    }
+
+    private void selectWNoReset(WContainer c, Setting<?> setting, Runnable action) {
+        boolean addCount = WSelectedCountLabel.getSize(setting) != -1;
+
+        WContainer c2 = c;
+        if (addCount) {
+            c2 = c.add(theme.horizontalList()).expandCellX().widget();
+            ((WHorizontalList) c2).spacing *= 2;
+        }
+
+        WButton button = c2.add(theme.button("Select")).expandCellX().widget();
+        button.action = action;
+
+        if (addCount) c2.add(new WSelectedCountLabel(setting).color(theme.textSecondaryColor()));
+        // No reset button
+    }
+
+    private static class WSelectedCountLabel extends WFlorenceLabel {
+        private final Setting<?> setting;
+        private int lastSize = -1;
+
+        public WSelectedCountLabel(Setting<?> setting) {
+            super("", false);
+
+            this.setting = setting;
+        }
+
+        @Override
+        protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+            int size = getSize(setting);
+
+            if (size != lastSize) {
+                set("(" + size + " selected)");
+                lastSize = size;
+            }
+
+            super.onRender(renderer, mouseX, mouseY, delta);
+        }
+
+        public static int getSize(Setting<?> setting) {
+            if (setting.get() instanceof Collection<?> collection) return collection.size();
+            if (setting.get() instanceof Map<?, ?> map) return map.size();
+
+            return -1;
+        }
+    }
+
+}

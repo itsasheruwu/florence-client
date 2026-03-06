@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "florencedevelopment.florenceclient.mixin.baritone",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "florencedevelopment.florenceclient.MixinPlugin",
+  "client": [
+    "ComeCommandMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

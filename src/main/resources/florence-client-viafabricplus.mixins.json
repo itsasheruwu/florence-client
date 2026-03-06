@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "package": "florencedevelopment.florenceclient.mixin.viafabricplus",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "florencedevelopment.florenceclient.MixinPlugin",
+  "client": [
+    "GeneralSettingsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
