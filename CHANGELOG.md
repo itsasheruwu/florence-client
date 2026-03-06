@@ -21,5 +21,5 @@ Initial public release of Florence Client for Minecraft 1.21.11.
 
 ### Notes
 
-- Release artifact version `1.21.11-1` is built from commit `5d03cfc`.
+- Release artifact version `1.21.11-1` is built from commit `43602eb`.
 - This is the first tagged release in the `florence-client` repository.
