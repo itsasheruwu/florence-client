@@ -1,0 +1,23 @@
+{
+  "required": false,
+  "package": "florencedevelopment.florenceclient.mixin.sodium",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "florencedevelopment.florenceclient.MixinPlugin",
+  "client": [
+    "MeshVertexConsumerMixin",
+    "SodiumBlockOcclusionCacheMixin",
+    "SodiumBlockRendererMixin",
+    "SodiumDefaultFluidRendererMixin",
+    "SodiumFluidRendererImplDefaultRenderContextMixin",
+    "SodiumFluidRendererImplMixin",
+    "SodiumInnerPartitionBSPNodeMixin",
+    "SodiumLightDataAccessMixin",
+    "SodiumWorldRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixinextras": {
+    "minVersion": "0.5.0"
+  }
+}

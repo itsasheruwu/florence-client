@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "package": "florencedevelopment.florenceclient.mixin.lithium",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "florencedevelopment.florenceclient.MixinPlugin",
+  "client": [
+    "ChunkAwareBlockCollisionSweeperMixin",
+    "LithiumEntityCollisionsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,494 @@
+/*
+ * This file is part of the Florence Client distribution.
+ * Copyright (c) Florence Development.
+ */
+
+package florencedevelopment.florenceclient.systems.modules.misc;
+
+import florencedevelopment.florenceclient.FlorenceClient;
+import florencedevelopment.florenceclient.events.entity.DropItemsEvent;
+import florencedevelopment.florenceclient.events.entity.player.InteractBlockEvent;
+import florencedevelopment.florenceclient.events.entity.player.InteractEntityEvent;
+import florencedevelopment.florenceclient.events.game.OpenScreenEvent;
+import florencedevelopment.florenceclient.events.florence.KeyEvent;
+import florencedevelopment.florenceclient.events.florence.MouseClickEvent;
+import florencedevelopment.florenceclient.events.packets.InventoryEvent;
+import florencedevelopment.florenceclient.events.packets.PacketEvent;
+import florencedevelopment.florenceclient.events.world.TickEvent;
+import florencedevelopment.florenceclient.mixin.HandledScreenAccessor;
+import florencedevelopment.florenceclient.settings.*;
+import florencedevelopment.florenceclient.systems.modules.Categories;
+import florencedevelopment.florenceclient.systems.modules.Module;
+import florencedevelopment.florenceclient.utils.Utils;
+import florencedevelopment.florenceclient.utils.misc.Keybind;
+import florencedevelopment.florenceclient.utils.misc.input.KeyAction;
+import florencedevelopment.florenceclient.utils.network.FlorenceExecutor;
+import florencedevelopment.florenceclient.utils.player.*;
+import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.Block;
+import net.minecraft.block.DecoratedPotBlock;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.entity.decoration.ItemFrameEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.ScreenHandlerType;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.util.Hand;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class InventoryTweaks extends Module {
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgSorting = settings.createGroup("Sorting");
+    private final SettingGroup sgAntiDrop = settings.createGroup("Anti Drop");
+    private final SettingGroup sgAutoDrop = settings.createGroup("Auto Drop");
+    private final SettingGroup sgStealDump = settings.createGroup("Steal and Dump");
+    private final SettingGroup sgAutoSteal = settings.createGroup("Auto Steal");
+
+    // General
+
+    private final Setting<Boolean> mouseDragItemMove = sgGeneral.add(new BoolSetting.Builder()
+        .name("mouse-drag-item-move")
+        .description("Moving mouse over items while holding shift will transfer it to the other container.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> xCarry = sgGeneral.add(new BoolSetting.Builder()
+        .name("xcarry")
+        .description("Allows you to store four extra item stacks in your crafting grid.")
+        .defaultValue(true)
+        .onChanged(v -> {
+            if (v || !Utils.canUpdate()) return;
+            mc.player.networkHandler.sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
+            invOpened = false;
+        })
+        .build()
+    );
+
+    // Sorting
+
+    private final Setting<Boolean> sortingEnabled = sgSorting.add(new BoolSetting.Builder()
+        .name("sorting-enabled")
+        .description("Automatically sorts stacks in inventory.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Keybind> sortingKey = sgSorting.add(new KeybindSetting.Builder()
+        .name("sorting-key")
+        .description("Key to trigger the sort.")
+        .visible(sortingEnabled::get)
+        .defaultValue(Keybind.fromButton(GLFW.GLFW_MOUSE_BUTTON_MIDDLE))
+        .build()
+    );
+
+    private final Setting<Integer> sortingDelay = sgSorting.add(new IntSetting.Builder()
+        .name("sorting-delay")
+        .description("Delay in ticks between moving items when sorting.")
+        .visible(sortingEnabled::get)
+        .defaultValue(1)
+        .min(0)
+        .build()
+    );
+
+    private final Setting<Boolean> disableInCreative = sgSorting.add(new BoolSetting.Builder()
+        .name("disable-in-creative")
+        .description("Disables the inventory sorter when in creative mode.")
+        .defaultValue(true)
+        .visible(sortingEnabled::get)
+        .build()
+    );
+
+    private final Setting<Boolean> uncapBundleScrolling = sgGeneral.add(new BoolSetting.Builder()
+        .name("uncap-bundle-scrolling")
+        .description("Whether to uncap the bundle scrolling feature to let you select any item.")
+        .defaultValue(true)
+        .build()
+    );
+
+    // Anti drop
+
+    private final Setting<List<Item>> antiDropItems = sgAntiDrop.add(new ItemListSetting.Builder()
+        .name("anti-drop-items")
+        .description("Items to prevent dropping. Doesn't work in creative inventory screen.")
+        .build()
+    );
+
+    private final Setting<Boolean> antiItemFrame = sgAntiDrop.add(new BoolSetting.Builder()
+        .name("item-frames")
+        .description("Prevent anti-drop items from being placed in item frames or pots")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Keybind> antiDropOverrideBind = sgAntiDrop.add(new KeybindSetting.Builder()
+        .name("override-bind")
+        .description("Hold this bind to temporarily bypass anti-drop")
+        .build()
+    );
+
+    // Auto Drop
+
+    private final Setting<List<Item>> autoDropItems = sgAutoDrop.add(new ItemListSetting.Builder()
+        .name("auto-drop-items")
+        .description("Items to drop.")
+        .build()
+    );
+
+    private final Setting<Boolean> autoDropExcludeEquipped = sgAutoDrop.add(new BoolSetting.Builder()
+        .name("exclude-equipped")
+        .description("Whether or not to drop items equipped in armor slots.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> autoDropExcludeHotbar = sgAutoDrop.add(new BoolSetting.Builder()
+        .name("exclude-hotbar")
+        .description("Whether or not to drop items from your hotbar.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> autoDropOnlyFullStacks = sgAutoDrop.add(new BoolSetting.Builder()
+        .name("only-full-stacks")
+        .description("Only drops the items if the stack is full.")
+        .defaultValue(false)
+        .build()
+    );
+
+    // Steal & Dump
+
+    public final Setting<List<ScreenHandlerType<?>>> stealScreens = sgStealDump.add(new ScreenHandlerListSetting.Builder()
+        .name("steal-screens")
+        .description("Select the screens to display buttons and auto steal.")
+        .defaultValue(List.of(ScreenHandlerType.GENERIC_9X3, ScreenHandlerType.GENERIC_9X6))
+        .build()
+    );
+
+    private final Setting<Boolean> buttons = sgStealDump.add(new BoolSetting.Builder()
+        .name("inventory-buttons")
+        .description("Shows steal and dump buttons in container guis.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> stealDrop = sgStealDump.add(new BoolSetting.Builder()
+        .name("steal-drop")
+        .description("Drop items to the ground instead of stealing them.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> dropBackwards = sgStealDump.add(new BoolSetting.Builder()
+        .name("drop-backwards")
+        .description("Drop items behind you.")
+        .defaultValue(false)
+        .visible(stealDrop::get)
+        .build()
+    );
+
+    private final Setting<ListMode> dumpFilter = sgStealDump.add(new EnumSetting.Builder<ListMode>()
+        .name("dump-filter")
+        .description("Dump mode.")
+        .defaultValue(ListMode.None)
+        .build()
+    );
+
+    private final Setting<List<Item>> dumpItems = sgStealDump.add(new ItemListSetting.Builder()
+        .name("dump-items")
+        .description("Items to dump.")
+        .build()
+    );
+
+    private final Setting<ListMode> stealFilter = sgStealDump.add(new EnumSetting.Builder<ListMode>()
+        .name("steal-filter")
+        .description("Steal mode.")
+        .defaultValue(ListMode.None)
+        .build()
+    );
+
+    private final Setting<List<Item>> stealItems = sgStealDump.add(new ItemListSetting.Builder()
+        .name("steal-items")
+        .description("Items to steal.")
+        .build()
+    );
+
+    // Auto Steal
+
+    private final Setting<Boolean> autoSteal = sgAutoSteal.add(new BoolSetting.Builder()
+        .name("auto-steal")
+        .description("Automatically removes all possible items when you open a container.")
+        .defaultValue(false)
+        .onChanged(val -> checkAutoStealSettings())
+        .build()
+    );
+
+    private final Setting<Boolean> autoDump = sgAutoSteal.add(new BoolSetting.Builder()
+        .name("auto-dump")
+        .description("Automatically dumps all possible items when you open a container.")
+        .defaultValue(false)
+        .onChanged(val -> checkAutoStealSettings())
+        .build()
+    );
+
+    private final Setting<Integer> autoStealDelay = sgAutoSteal.add(new IntSetting.Builder()
+        .name("delay")
+        .description("The minimum delay between stealing the next stack in milliseconds.")
+        .defaultValue(20)
+        .sliderMax(1000)
+        .build()
+    );
+
+    private final Setting<Integer> autoStealInitDelay = sgAutoSteal.add(new IntSetting.Builder()
+        .name("initial-delay")
+        .description("The initial delay before stealing in milliseconds. 0 to use normal delay instead.")
+        .defaultValue(50)
+        .sliderMax(1000)
+        .build()
+    );
+
+    private final Setting<Integer> autoStealRandomDelay = sgAutoSteal.add(new IntSetting.Builder()
+        .name("random")
+        .description("Randomly adds a delay of up to the specified time in milliseconds.")
+        .min(0)
+        .sliderMax(1000)
+        .defaultValue(50)
+        .build()
+    );
+
+    private InventorySorter sorter;
+    private boolean invOpened;
+
+    public InventoryTweaks() {
+        super(Categories.Misc, "inventory-tweaks", "Various inventory related utilities.");
+    }
+
+    @Override
+    public void onActivate() {
+        invOpened = false;
+    }
+
+    @Override
+    public void onDeactivate() {
+        sorter = null;
+
+        if (invOpened) {
+            mc.player.networkHandler.sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
+        }
+    }
+
+    // Sorting and armour swapping
+
+    @EventHandler
+    private void onKey(KeyEvent event) {
+        if (event.action != KeyAction.Press) return;
+
+        if (sortingKey.get().matches(event.input)) {
+            if (sort()) event.cancel();
+        }
+    }
+
+    @EventHandler
+    private void onMouseClick(MouseClickEvent event) {
+        if (event.action != KeyAction.Press) return;
+
+        if (sortingKey.get().matches(event.input)) {
+            if (sort()) event.cancel();
+        }
+    }
+
+    private boolean sort() {
+        if (!sortingEnabled.get() || !(mc.currentScreen instanceof HandledScreen<?> screen) || sorter != null || (mc.player.isCreative() && disableInCreative.get()))
+            return false;
+
+        if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) {
+            FindItemResult empty = InvUtils.findEmpty();
+            if (!empty.found()) InvUtils.click().slot(-999);
+            else InvUtils.click().slot(empty.slot());
+        }
+
+        Slot focusedSlot = ((HandledScreenAccessor) screen).florence$getFocusedSlot();
+        if (focusedSlot == null) return false;
+
+        sorter = new InventorySorter(screen, focusedSlot);
+        return true;
+    }
+
+    @EventHandler
+    private void onOpenScreen(OpenScreenEvent event) {
+        sorter = null;
+    }
+
+    @EventHandler
+    private void onTickPre(TickEvent.Pre event) {
+        if (sorter != null && sorter.tick(sortingDelay.get())) sorter = null;
+    }
+
+    // Auto Drop
+
+    @EventHandler
+    private void onTickPost(TickEvent.Post event) {
+        // Auto Drop
+        if (!Utils.canUpdate() || mc.currentScreen instanceof HandledScreen<?> || autoDropItems.get().isEmpty()) return;
+
+        for (int i = autoDropExcludeHotbar.get() ? 9 : 0; i < mc.player.getInventory().size(); i++) {
+            ItemStack itemStack = mc.player.getInventory().getStack(i);
+
+            if (autoDropItems.get().contains(itemStack.getItem())) {
+                if ((!autoDropOnlyFullStacks.get() || itemStack.getCount() == itemStack.getMaxCount()) &&
+                    !(autoDropExcludeEquipped.get() && SlotUtils.isArmor(i))) InvUtils.drop().slot(i);
+            }
+        }
+    }
+
+    // Anti Drop
+
+    @EventHandler
+    private void onDropItems(DropItemsEvent event) {
+        if (antiDropOverrideBind.get().isPressed()) return;
+        if (antiDropItems.get().contains(event.itemStack.getItem())) event.cancel();
+    }
+
+    @EventHandler
+    private void onInteractEntity(InteractEntityEvent event) {
+        if (!antiItemFrame.get() || antiDropOverrideBind.get().isPressed()) return;
+        if (!(event.entity instanceof ItemFrameEntity)) return;
+
+        Item item = mc.player.getStackInHand(event.hand).getItem();
+        if (antiDropItems.get().contains(item)) event.cancel();
+    }
+
+    @EventHandler
+    private void onInteractBlock(InteractBlockEvent event) {
+        if (!antiItemFrame.get() || antiDropOverrideBind.get().isPressed()) return;
+        if (event.hand != Hand.MAIN_HAND) return;
+        Block block = mc.world.getBlockState(event.result.getBlockPos()).getBlock();
+        if (!(block instanceof DecoratedPotBlock)) return;
+
+        Item item = mc.player.getStackInHand(event.hand).getItem();
+        if (antiDropItems.get().contains(item)) event.cancel();
+    }
+
+    // XCarry
+
+    @EventHandler
+    private void onSendPacket(PacketEvent.Send event) {
+        if (!xCarry.get() || !(event.packet instanceof CloseHandledScreenC2SPacket packet)) return;
+
+        if (packet.getSyncId() == mc.player.playerScreenHandler.syncId) {
+            invOpened = true;
+            event.cancel();
+        }
+    }
+
+    // Auto Steal
+
+    private void checkAutoStealSettings() {
+        if (autoSteal.get() && autoDump.get()) {
+            error("You can't enable Auto Steal and Auto Dump at the same time!");
+            autoDump.set(false);
+        }
+    }
+
+    private int getSleepTime() {
+        return autoStealDelay.get() + (autoStealRandomDelay.get() > 0 ? ThreadLocalRandom.current().nextInt(0, autoStealRandomDelay.get()) : 0);
+    }
+
+    private void moveSlots(ScreenHandler handler, int start, int end, boolean steal) {
+        boolean initial = autoStealInitDelay.get() != 0;
+        for (int i = start; i < end; i++) {
+            if (!handler.getSlot(i).hasStack()) continue;
+
+            // Exit if user closes screen or exit world
+            if (mc.currentScreen == null || !Utils.canUpdate()) break;
+
+            Item item = handler.getSlot(i).getStack().getItem();
+            if (steal) {
+                if (stealFilter.get() == ListMode.Whitelist && !stealItems.get().contains(item))
+                    continue;
+                if (stealFilter.get() == ListMode.Blacklist && stealItems.get().contains(item))
+                    continue;
+            } else {
+                if (dumpFilter.get() == ListMode.Whitelist && !dumpItems.get().contains(item))
+                    continue;
+                if (dumpFilter.get() == ListMode.Blacklist && dumpItems.get().contains(item))
+                    continue;
+            }
+
+            int sleep;
+            if (initial) {
+                sleep = autoStealInitDelay.get();
+                initial = false;
+            } else sleep = getSleepTime();
+            if (sleep > 0) {
+                try {
+                    Thread.sleep(sleep);
+                } catch (InterruptedException e) {
+                    FlorenceClient.LOG.error("Error when sleeping the slot mover", e);
+                }
+            }
+
+            // Exit if user closes screen or exit world
+            if (mc.currentScreen == null || !Utils.canUpdate()) break;
+
+            if (steal && stealDrop.get()) {
+                if (dropBackwards.get()) {
+                    int iCopy = i;
+                    Rotations.rotate(mc.player.getYaw() - 180, mc.player.getPitch(), () -> InvUtils.drop().slotId(iCopy));
+                }
+            } else InvUtils.shiftClick().slotId(i);
+        }
+    }
+
+    public void steal(ScreenHandler handler) {
+        FlorenceExecutor.execute(() -> moveSlots(handler, 0, SlotUtils.indexToId(SlotUtils.MAIN_START), true));
+    }
+
+    public void dump(ScreenHandler handler) {
+        int playerInvOffset = SlotUtils.indexToId(SlotUtils.MAIN_START);
+        FlorenceExecutor.execute(() -> moveSlots(handler, playerInvOffset, playerInvOffset + 4 * 9, false));
+    }
+
+    public boolean showButtons() {
+        return isActive() && buttons.get();
+    }
+
+    public boolean mouseDragItemMove() {
+        return isActive() && mouseDragItemMove.get();
+    }
+
+    public boolean uncapBundleScrolling() {
+        return isActive() && uncapBundleScrolling.get();
+    }
+
+    public boolean canSteal(ScreenHandler handler) {
+        try {
+            return (stealScreens.get().contains(handler.getType()));
+        } catch (UnsupportedOperationException e) {
+            return false;
+        }
+    }
+
+    @EventHandler
+    private void onInventory(InventoryEvent event) {
+        ScreenHandler handler = mc.player.currentScreenHandler;
+        if (canSteal(handler) && event.packet.syncId() == handler.syncId) {
+            if (autoSteal.get()) {
+                steal(handler);
+            } else if (autoDump.get()) {
+                dump(handler);
+            }
+        }
+    }
+
+    public enum ListMode {
+        Whitelist,
+        Blacklist,
+        None
+    }
+}

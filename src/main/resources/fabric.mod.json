@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "name": "Florence Client",
+  "id": "florence-client",
+  "version": "${version}",
+  "description": "Based utility mod.",
+  "authors": [
+    "MineGame159",
+    "squidoodly",
+    "seasnail"
+  ],
+  "license": "GPL-3.0",
+  "icon": "assets/florence-client/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "florencedevelopment.florenceclient.FlorenceClient"
+    ],
+    "modmenu": [
+      "florencedevelopment.florenceclient.modintegration.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "florence-client.mixins.json",
+    "florence-client-baritone.mixins.json",
+    "florence-client-indigo.mixins.json",
+    "florence-client-sodium.mixins.json",
+    "florence-client-lithium.mixins.json",
+    "florence-client-viafabricplus.mixins.json"
+  ],
+  "accessWidener": "florence-client.accesswidener",
+  "custom": {
+    "florence-client:build_number": "${build_number}",
+    "florence-client:color": "145,61,226",
+    "florence-client:commit": "${commit}",
+    "badoptimizations:cache_hooks": {
+      "lightmap": "florencedevelopment.florenceclient.modintegration.BadOptimizationsHook"
+    }
+  },
+  "depends": {
+    "java": ">=21",
+    "minecraft": ["${minecraft_version}"],
+    "fabricloader": ">=${loader_version}"
+  },
+  "breaks": {
+    "optifabric": "*",
+    "feather": "*",
+    "origins": "*",
+    "sodium": "<0.7.0",
+    "morechathistory": "*"
+  }
+}

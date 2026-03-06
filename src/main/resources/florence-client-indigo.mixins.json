@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "package": "florencedevelopment.florenceclient.mixin.indigo",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "florencedevelopment.florenceclient.MixinPlugin",
+  "client": [
+    "AbstractTerrainRenderContextMixin",
+    "BlockRenderInfoMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

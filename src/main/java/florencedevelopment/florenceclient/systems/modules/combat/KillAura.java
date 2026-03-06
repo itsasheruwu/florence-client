@@ -1,0 +1,642 @@
+/*
+ * This file is part of the Florence Client distribution.
+ * Copyright (c) Florence Development.
+ */
+
+package florencedevelopment.florenceclient.systems.modules.combat;
+
+import florencedevelopment.florenceclient.events.packets.PacketEvent;
+import florencedevelopment.florenceclient.events.world.TickEvent;
+import florencedevelopment.florenceclient.pathing.PathManagers;
+import florencedevelopment.florenceclient.settings.*;
+import florencedevelopment.florenceclient.systems.friends.Friends;
+import florencedevelopment.florenceclient.systems.modules.Categories;
+import florencedevelopment.florenceclient.systems.modules.Module;
+import florencedevelopment.florenceclient.systems.modules.Modules;
+import florencedevelopment.florenceclient.utils.entity.EntityUtils;
+import florencedevelopment.florenceclient.utils.entity.SortPriority;
+import florencedevelopment.florenceclient.utils.entity.Target;
+import florencedevelopment.florenceclient.utils.entity.TargetUtils;
+import florencedevelopment.florenceclient.utils.entity.fakeplayer.FakePlayerEntity;
+import florencedevelopment.florenceclient.utils.player.FindItemResult;
+import florencedevelopment.florenceclient.utils.player.InvUtils;
+import florencedevelopment.florenceclient.utils.player.PlayerUtils;
+import florencedevelopment.florenceclient.utils.player.Rotations;
+import florencedevelopment.florenceclient.utils.world.TickRate;
+import meteordevelopment.orbit.EventHandler;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.Tameable;
+import net.minecraft.entity.mob.EndermanEntity;
+import net.minecraft.entity.mob.PiglinEntity;
+import net.minecraft.entity.mob.ZombifiedPiglinEntity;
+import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.WolfEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.*;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
+import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.util.Hand;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameMode;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+public class KillAura extends Module {
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgTargeting = settings.createGroup("Targeting");
+    private final SettingGroup sgTiming = settings.createGroup("Timing");
+
+    // General
+
+    private final Setting<AttackItems> attackWhenHolding = sgGeneral.add(new EnumSetting.Builder<AttackItems>()
+        .name("attack-when-holding")
+        .description("Only attacks an entity when a specified item is in your hand.")
+        .defaultValue(AttackItems.Weapons)
+        .build()
+    );
+
+    private final Setting<List<Item>> weapons = sgGeneral.add(new ItemListSetting.Builder()
+        .name("selected-weapon-types")
+        .description("Which types of weapons to attack with (if you select the diamond sword, any type of sword may be used to attack).")
+        .defaultValue(Items.DIAMOND_SWORD, Items.DIAMOND_AXE, Items.TRIDENT)
+        .filter(FILTER::contains)
+        .visible(() -> attackWhenHolding.get() == AttackItems.Weapons)
+        .build()
+    );
+
+    private final Setting<RotationMode> rotation = sgGeneral.add(new EnumSetting.Builder<RotationMode>()
+        .name("rotate")
+        .description("Determines when you should rotate towards the target.")
+        .defaultValue(RotationMode.Always)
+        .build()
+    );
+
+    private final Setting<Boolean> autoSwitch = sgGeneral.add(new BoolSetting.Builder()
+        .name("auto-switch")
+        .description("Switches to an acceptable weapon when attacking the target.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> bowBot = sgGeneral.add(new BoolSetting.Builder()
+        .name("bow-bot")
+        .description("Use bow when target is out of melee range.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private static final float BOW_GRAVITY = 0.006f;
+    /** Minimum pull progress to release (avoids weak inaccurate spam). */
+    private static final float MIN_BOW_CHARGE_TO_SHOOT = 0.5f;
+    /** Max range to consider targets for bow (full-charge arrow reach). */
+    private static final double BOW_MAX_RANGE = 50;
+
+    private float minBowVelocityToReach(Entity target) {
+        Vec3d pos = target.getEntityPos();
+        double relativeX = pos.x - mc.player.getX();
+        double relativeY = pos.y + (target.getHeight() / 2) - mc.player.getEyeY();
+        double relativeZ = pos.z - mc.player.getZ();
+        double hDistance = Math.sqrt(relativeX * relativeX + relativeZ * relativeZ);
+        double hDistanceSq = hDistance * hDistance;
+        double term = BOW_GRAVITY * (relativeY + Math.sqrt(relativeY * relativeY + hDistanceSq));
+        float minVelSq = (float) Math.max(0, term);
+        float minVel = (float) Math.sqrt(minVelSq);
+        return Math.min(1.0f, minVel);
+    }
+
+    private final Setting<Boolean> swapBack = sgGeneral.add(new BoolSetting.Builder()
+        .name("swap-back")
+        .description("Switches to your previous slot when done attacking the target.")
+        .defaultValue(false)
+        .visible(() -> autoSwitch.get() || bowBot.get())
+        .build()
+    );
+
+    private final Setting<ShieldMode> shieldMode = sgGeneral.add(new EnumSetting.Builder<ShieldMode>()
+        .name("shield-mode")
+        .description("""
+            What to do when your target is blocking with a shield:
+            - Ignore:   Don't attack them if they are blocking
+            - Break:    Swap to an axe to disable the shield (Only if Auto Switch is enabled)
+            - None:     Attack them as normal
+        """)
+        .defaultValue(ShieldMode.None)
+        .build()
+    );
+
+    private final Setting<Boolean> onlyOnClick = sgGeneral.add(new BoolSetting.Builder()
+        .name("only-on-click")
+        .description("Only attacks when holding left click.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> onlyOnLook = sgGeneral.add(new BoolSetting.Builder()
+        .name("only-on-look")
+        .description("Only attacks when looking at an entity.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> pauseOnCombat = sgGeneral.add(new BoolSetting.Builder()
+        .name("pause-baritone")
+        .description("Freezes Baritone temporarily until you are finished attacking the entity.")
+        .defaultValue(true)
+        .build()
+    );
+
+    // Targeting
+
+    private final Setting<Set<EntityType<?>>> entities = sgTargeting.add(new EntityTypeListSetting.Builder()
+        .name("entities")
+        .description("Entities to attack.")
+        .onlyAttackable()
+        .defaultValue(EntityType.PLAYER)
+        .build()
+    );
+
+    private final Setting<SortPriority> priority = sgTargeting.add(new EnumSetting.Builder<SortPriority>()
+        .name("priority")
+        .description("How to filter targets within range.")
+        .defaultValue(SortPriority.ClosestAngle)
+        .build()
+    );
+
+    private final Setting<Integer> maxTargets = sgTargeting.add(new IntSetting.Builder()
+        .name("max-targets")
+        .description("How many entities to target at once.")
+        .defaultValue(1)
+        .min(1)
+        .sliderRange(1, 5)
+        .visible(() -> !onlyOnLook.get())
+        .build()
+    );
+
+    private final Setting<Double> range = sgTargeting.add(new DoubleSetting.Builder()
+        .name("range")
+        .description("The maximum range the entity can be to attack it.")
+        .defaultValue(4.5)
+        .min(0)
+        .sliderMax(6)
+        .build()
+    );
+
+    private final Setting<Double> wallsRange = sgTargeting.add(new DoubleSetting.Builder()
+        .name("walls-range")
+        .description("The maximum range the entity can be attacked through walls.")
+        .defaultValue(3.5)
+        .min(0)
+        .sliderMax(6)
+        .build()
+    );
+
+    private final Setting<EntityAge> mobAgeFilter = sgTargeting.add(new EnumSetting.Builder<EntityAge>()
+        .name("mob-age-filter")
+        .description("Determines the age of the mobs to target (baby, adult, or both).")
+        .defaultValue(EntityAge.Adult)
+        .build()
+    );
+
+    private final Setting<Boolean> ignoreNamed = sgTargeting.add(new BoolSetting.Builder()
+        .name("ignore-named")
+        .description("Whether or not to attack mobs with a name.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> ignorePassive = sgTargeting.add(new BoolSetting.Builder()
+        .name("ignore-passive")
+        .description("Will only attack sometimes passive mobs if they are targeting you.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> ignoreTamed = sgTargeting.add(new BoolSetting.Builder()
+        .name("ignore-tamed")
+        .description("Will avoid attacking mobs you tamed.")
+        .defaultValue(false)
+        .build()
+    );
+
+    // Timing
+
+    private final Setting<Boolean> pauseOnLag = sgTiming.add(new BoolSetting.Builder()
+        .name("pause-on-lag")
+        .description("Pauses if the server is lagging.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> pauseOnUse = sgTiming.add(new BoolSetting.Builder()
+        .name("pause-on-use")
+        .description("Does not attack while using an item.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> pauseOnCA = sgTiming.add(new BoolSetting.Builder()
+        .name("pause-on-CA")
+        .description("Does not attack while CA is placing.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> tpsSync = sgTiming.add(new BoolSetting.Builder()
+        .name("TPS-sync")
+        .description("Tries to sync attack delay with the server's TPS.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> customDelay = sgTiming.add(new BoolSetting.Builder()
+        .name("custom-delay")
+        .description("Use a custom delay instead of the vanilla cooldown.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> hitDelay = sgTiming.add(new IntSetting.Builder()
+        .name("hit-delay")
+        .description("How fast you hit the entity in ticks.")
+        .defaultValue(11)
+        .min(0)
+        .sliderMax(60)
+        .visible(customDelay::get)
+        .build()
+    );
+
+    private final Setting<Integer> switchDelay = sgTiming.add(new IntSetting.Builder()
+        .name("switch-delay")
+        .description("How many ticks to wait before hitting an entity after switching hotbar slots.")
+        .defaultValue(0)
+        .min(0)
+        .sliderMax(10)
+        .build()
+    );
+
+    private final static ArrayList<Item> FILTER = new ArrayList<>(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_AXE, Items.DIAMOND_PICKAXE, Items.DIAMOND_SHOVEL, Items.DIAMOND_HOE, Items.MACE, Items.DIAMOND_SPEAR, Items.TRIDENT));
+    private final List<Entity> targets = new ArrayList<>();
+    private int switchTimer, hitTimer;
+    private boolean wasPathing = false;
+    public boolean attacking, swapped;
+    private boolean bowCharging = false;
+    public static int previousSlot;
+
+    public KillAura() {
+        super(Categories.Combat, "kill-aura", "Attacks specified entities around you.");
+    }
+
+    @Override
+    public void onActivate() {
+        previousSlot = -1;
+        swapped = false;
+        bowCharging = false;
+    }
+
+    @Override
+    public void onDeactivate() {
+        targets.clear();
+        stopAttacking();
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Pre event) {
+        if (!mc.player.isAlive() || PlayerUtils.getGameMode() == GameMode.SPECTATOR) {
+            stopAttacking();
+            return;
+        }
+        if (pauseOnUse.get() && (mc.interactionManager.isBreakingBlock() || (mc.player.isUsingItem() && !bowCharging))) {
+            stopAttacking();
+            return;
+        }
+        if (onlyOnClick.get() && !mc.options.attackKey.isPressed()) {
+            stopAttacking();
+            return;
+        }
+        if (TickRate.INSTANCE.getTimeSinceLastTick() >= 1f && pauseOnLag.get()) {
+            stopAttacking();
+            return;
+        }
+        if (pauseOnCA.get() && Modules.get().get(CrystalAura.class).isActive() && Modules.get().get(CrystalAura.class).kaTimer > 0) {
+            stopAttacking();
+            return;
+        }
+        if (onlyOnLook.get()) {
+            Entity targeted = mc.targetedEntity;
+
+            if (targeted == null || !entityCheck(targeted)) {
+                stopAttacking();
+                return;
+            }
+
+            targets.clear();
+            targets.add(mc.targetedEntity);
+        } else {
+            targets.clear();
+            TargetUtils.getList(targets, this::entityCheck, priority.get(), maxTargets.get());
+        }
+
+        if (targets.isEmpty()) {
+            stopAttacking();
+            return;
+        }
+
+        Entity primary = targets.getFirst();
+        double distance = PlayerUtils.distanceTo(primary);
+        boolean isBowCharging = bowCharging && InvUtils.testInMainHand(Items.BOW) && mc.player.isUsingItem();
+
+        if (isBowCharging) {
+            if (!primary.isAlive() || primary.isRemoved()) {
+                releaseBowAndStop();
+                return;
+            }
+            if (!PlayerUtils.canSeeEntity(primary)) {
+                releaseBowAndStop();
+                return;
+            }
+            rotateBowAim(primary);
+            float currentVelocity = BowItem.getPullProgress(mc.player.getItemUseTime());
+            float minVelocity = minBowVelocityToReach(primary);
+            boolean fullCharge = mc.player.getItemUseTime() >= 20;
+            float pitch = computeBowPitch(primary, currentVelocity);
+            boolean trajectoryValid = !Float.isNaN(pitch);
+            boolean chargeEnough = fullCharge || currentVelocity >= minVelocity;
+            boolean chargeAccurate = currentVelocity >= MIN_BOW_CHARGE_TO_SHOOT;
+            if (trajectoryValid && chargeEnough && chargeAccurate) {
+                mc.interactionManager.stopUsingItem(mc.player);
+                mc.options.useKey.setPressed(false);
+                bowCharging = false;
+                if (swapBack.get() && swapped) {
+                    InvUtils.swap(previousSlot, false);
+                    swapped = false;
+                }
+            }
+            return;
+        }
+
+        if (bowBot.get() && distance > range.get() && distance <= BOW_MAX_RANGE && hasBowAndArrows() && PlayerUtils.canSeeEntity(primary)) {
+            FindItemResult bowResult = InvUtils.find(itemStack -> itemStack.isOf(Items.BOW), 0, 8);
+            if (!bowResult.found()) return;
+
+            if (!InvUtils.testInMainHand(Items.BOW)) {
+                previousSlot = mc.player.getInventory().getSelectedSlot();
+                swapped = true;
+                InvUtils.swap(bowResult.slot(), false);
+            }
+
+            attacking = true;
+            if (pauseOnCombat.get() && PathManagers.get().isPathing() && !wasPathing) {
+                PathManagers.get().pause();
+                wasPathing = true;
+            }
+            rotateBowAim(primary);
+            mc.options.useKey.setPressed(true);
+            bowCharging = true;
+            return;
+        }
+
+        if (distance > range.get()) return;
+
+        if (autoSwitch.get()) {
+            FindItemResult weaponResult = new FindItemResult(mc.player.getInventory().getSelectedSlot(), -1);
+            if (attackWhenHolding.get() == AttackItems.Weapons) weaponResult = InvUtils.find(this::acceptableWeapon, 0, 8);
+
+            if (shouldShieldBreak()) {
+                FindItemResult axeResult = InvUtils.find(itemStack -> itemStack.getItem() instanceof AxeItem, 0, 8);
+                if (axeResult.found()) weaponResult = axeResult;
+            }
+
+            if (!swapped) {
+                previousSlot  = mc.player.getInventory().getSelectedSlot();
+                swapped = true;
+            }
+
+            InvUtils.swap(weaponResult.slot(), false);
+        }
+
+        if (!acceptableWeapon(mc.player.getMainHandStack())) {
+            stopAttacking();
+            return;
+        }
+
+        attacking = true;
+        if (rotation.get() == RotationMode.Always) Rotations.rotate(Rotations.getYaw(primary), Rotations.getPitch(primary, Target.Body));
+        if (pauseOnCombat.get() && PathManagers.get().isPathing() && !wasPathing) {
+            PathManagers.get().pause();
+            wasPathing = true;
+        }
+
+        if (delayCheck()) targets.forEach(this::attack);
+    }
+
+    @EventHandler
+    private void onSendPacket(PacketEvent.Send event) {
+        if (event.packet instanceof UpdateSelectedSlotC2SPacket) {
+            switchTimer = switchDelay.get();
+        }
+    }
+
+    private void stopAttacking() {
+        if (!attacking) return;
+
+        attacking = false;
+        if (bowCharging) {
+            mc.interactionManager.stopUsingItem(mc.player);
+            mc.options.useKey.setPressed(false);
+            bowCharging = false;
+        }
+        if (wasPathing) {
+            PathManagers.get().resume();
+            wasPathing = false;
+        }
+        if (swapBack.get() && swapped) {
+            InvUtils.swap(previousSlot, false);
+            swapped = false;
+        }
+    }
+
+    private void releaseBowAndStop() {
+        mc.interactionManager.stopUsingItem(mc.player);
+        mc.options.useKey.setPressed(false);
+        bowCharging = false;
+        stopAttacking();
+    }
+
+    private boolean hasBowAndArrows() {
+        if (!InvUtils.find(itemStack -> itemStack.isOf(Items.BOW), 0, 8).found()) return false;
+        return mc.player.getAbilities().creativeMode || InvUtils.find(itemStack -> itemStack.getItem() instanceof ArrowItem).found();
+    }
+
+    /**
+     * Returns the pitch (degrees) needed to hit the target with the given velocity, or Float.NaN if no valid trajectory.
+     */
+    private float computeBowPitch(Entity target, float velocity) {
+        Vec3d pos = target.getEntityPos();
+        double relativeX = pos.x - mc.player.getX();
+        double relativeY = pos.y + (target.getHeight() / 2) - mc.player.getEyeY();
+        double relativeZ = pos.z - mc.player.getZ();
+        double hDistance = Math.sqrt(relativeX * relativeX + relativeZ * relativeZ);
+        if (hDistance < 1e-6) return Float.NaN;
+        double hDistanceSq = hDistance * hDistance;
+        float velocitySq = velocity * velocity;
+        double discriminant = velocitySq * velocitySq - BOW_GRAVITY * (BOW_GRAVITY * hDistanceSq + 2 * relativeY * velocitySq);
+        if (discriminant < 0) return Float.NaN;
+        float pitch = (float) -Math.toDegrees(Math.atan((velocitySq - Math.sqrt(discriminant)) / (BOW_GRAVITY * hDistance)));
+        return pitch;
+    }
+
+    private void rotateBowAim(Entity target) {
+        float velocity = mc.player.isUsingItem()
+            ? BowItem.getPullProgress(mc.player.getItemUseTime())
+            : 0;
+        Vec3d pos = target.getEntityPos();
+        float pitch = computeBowPitch(target, velocity);
+        if (Float.isNaN(pitch)) {
+            Rotations.rotate(Rotations.getYaw(target), Rotations.getPitch(target));
+        } else {
+            Rotations.rotate(Rotations.getYaw(new Vec3d(pos.x, pos.y, pos.z)), pitch);
+        }
+    }
+
+    private boolean shouldShieldBreak() {
+        for (Entity target : targets) {
+            if (target instanceof PlayerEntity player) {
+                if (player.isBlocking() && shieldMode.get() == ShieldMode.Break) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private boolean entityCheck(Entity entity) {
+        if (entity.equals(mc.player) || entity.equals(mc.getCameraEntity())) return false;
+        if ((entity instanceof LivingEntity livingEntity && livingEntity.isDead()) || !entity.isAlive()) return false;
+
+        Box hitbox = entity.getBoundingBox();
+        boolean inMeleeRange = PlayerUtils.isWithin(
+            MathHelper.clamp(mc.player.getX(), hitbox.minX, hitbox.maxX),
+            MathHelper.clamp(mc.player.getY(), hitbox.minY, hitbox.maxY),
+            MathHelper.clamp(mc.player.getZ(), hitbox.minZ, hitbox.maxZ),
+            range.get()
+        );
+        boolean inBowRange = bowBot.get() && PlayerUtils.isWithin(
+            MathHelper.clamp(mc.player.getX(), hitbox.minX, hitbox.maxX),
+            MathHelper.clamp(mc.player.getY(), hitbox.minY, hitbox.maxY),
+            MathHelper.clamp(mc.player.getZ(), hitbox.minZ, hitbox.maxZ),
+            BOW_MAX_RANGE
+        );
+        if (!inMeleeRange && !inBowRange) return false;
+
+        if (!entities.get().contains(entity.getType())) return false;
+        if (ignoreNamed.get() && entity.hasCustomName()) return false;
+        if (!PlayerUtils.canSeeEntity(entity) && !PlayerUtils.isWithin(entity, wallsRange.get())) return false;
+        if (ignoreTamed.get()) {
+            if (entity instanceof Tameable tameable
+                && tameable.getOwner() != null
+                && tameable.getOwner().equals(mc.player)
+            ) return false;
+        }
+        if (ignorePassive.get()) {
+            if (entity instanceof EndermanEntity enderman && !enderman.isAngry()) return false;
+            if (entity instanceof PiglinEntity piglin && !piglin.isAttacking()) return false;
+            if (entity instanceof ZombifiedPiglinEntity zombifiedPiglin && !zombifiedPiglin.isAttacking()) return false;
+            if (entity instanceof WolfEntity wolf && !wolf.isAttacking()) return false;
+        }
+        if (entity instanceof PlayerEntity player) {
+            if (player.isCreative()) return false;
+            if (!Friends.get().shouldAttack(player)) return false;
+            if (shieldMode.get() == ShieldMode.Ignore && player.isBlocking()) return false;
+            if (player instanceof FakePlayerEntity fakePlayer && fakePlayer.noHit) return false;
+        }
+        if (entity instanceof AnimalEntity animal) {
+            return switch (mobAgeFilter.get()) {
+                case Baby -> animal.isBaby();
+                case Adult -> !animal.isBaby();
+                case Both -> true;
+            };
+        }
+        return true;
+    }
+
+    private boolean delayCheck() {
+        if (switchTimer > 0) {
+            switchTimer--;
+            return false;
+        }
+
+        float delay = (customDelay.get()) ? hitDelay.get() : 0.5f;
+        if (tpsSync.get()) delay /= (TickRate.INSTANCE.getTickRate() / 20);
+
+        if (customDelay.get()) {
+            if (hitTimer < delay) {
+                hitTimer++;
+                return false;
+            } else return true;
+        } else return mc.player.getAttackCooldownProgress(delay) >= 1;
+    }
+
+    private void attack(Entity target) {
+        if (rotation.get() == RotationMode.OnHit) Rotations.rotate(Rotations.getYaw(target), Rotations.getPitch(target, Target.Body));
+
+        mc.interactionManager.attackEntity(mc.player, target);
+        mc.player.swingHand(Hand.MAIN_HAND);
+
+        hitTimer = 0;
+    }
+
+    private boolean acceptableWeapon(ItemStack stack) {
+        if (shouldShieldBreak()) return stack.getItem() instanceof AxeItem;
+        if (attackWhenHolding.get() == AttackItems.All) return true;
+
+        if (weapons.get().contains(Items.DIAMOND_SWORD) && stack.isIn(ItemTags.SWORDS)) return true;
+        if (weapons.get().contains(Items.DIAMOND_AXE) && stack.isIn(ItemTags.AXES)) return true;
+        if (weapons.get().contains(Items.DIAMOND_PICKAXE) && stack.isIn(ItemTags.PICKAXES)) return true;
+        if (weapons.get().contains(Items.DIAMOND_SHOVEL) && stack.isIn(ItemTags.SHOVELS)) return true;
+        if (weapons.get().contains(Items.DIAMOND_HOE) && stack.isIn(ItemTags.HOES)) return true;
+        if (weapons.get().contains(Items.MACE) && stack.getItem() instanceof MaceItem) return true;
+        if (weapons.get().contains(Items.DIAMOND_SPEAR) && stack.isIn(ItemTags.SPEARS)) return true;
+        return weapons.get().contains(Items.TRIDENT) && stack.getItem() instanceof TridentItem;
+    }
+
+    public Entity getTarget() {
+        if (!targets.isEmpty()) return targets.getFirst();
+        return null;
+    }
+
+    @Override
+    public String getInfoString() {
+        if (!targets.isEmpty()) return EntityUtils.getName(getTarget());
+        return null;
+    }
+
+    public enum AttackItems {
+        Weapons,
+        All
+    }
+
+    public enum RotationMode {
+        Always,
+        OnHit,
+        None
+    }
+
+    public enum ShieldMode {
+        Ignore,
+        Break,
+        None
+    }
+
+    public enum EntityAge {
+        Baby,
+        Adult,
+        Both
+    }
+}
