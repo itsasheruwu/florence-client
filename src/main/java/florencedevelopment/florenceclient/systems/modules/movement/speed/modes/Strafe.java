@@ -9,13 +9,13 @@ import florencedevelopment.florenceclient.events.entity.player.PlayerMoveEvent;
 import florencedevelopment.florenceclient.mixininterface.IVec3d;
 import florencedevelopment.florenceclient.systems.modules.Modules;
 import florencedevelopment.florenceclient.systems.modules.movement.Anchor;
+import florencedevelopment.florenceclient.systems.modules.movement.TargetStrafe;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.SpeedMode;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.SpeedModes;
 import florencedevelopment.florenceclient.utils.player.PlayerUtils;
 import org.joml.Vector2d;
 
 public class Strafe extends SpeedMode {
-
     public Strafe() {
         super(SpeedModes.Strafe);
     }
@@ -24,14 +24,17 @@ public class Strafe extends SpeedMode {
 
     @Override
     public void onMove(PlayerMoveEvent event) {
+        TargetStrafe targetStrafe = Modules.get().get(TargetStrafe.class);
+        boolean moving = PlayerUtils.isMoving() || (targetStrafe != null && targetStrafe.shouldStrafe());
+
         switch (stage) {
             case 0: //Reset
-                if (PlayerUtils.isMoving()) {
+                if (moving) {
                     stage++;
                     speed = 1.18f * getDefaultSpeed() - 0.01;
                 }
             case 1: //Jump
-                if (!PlayerUtils.isMoving() || !mc.player.isOnGround()) break;
+                if (!moving || !mc.player.isOnGround()) break;
 
                 ((IVec3d) event.movement).florence$setY(getHop(0.40123128));
                 speed *= settings.ncpSpeed.get();
@@ -47,6 +50,10 @@ public class Strafe extends SpeedMode {
         }
 
         speed = Math.max(speed, getDefaultSpeed());
+
+        if (settings.strafeDamageBoost.get() && mc.player.hurtTime > 0) {
+            speed *= settings.strafeDamageBoostMultiplier.get();
+        }
 
         if (settings.ncpSpeedLimit.get()) {
             if (System.currentTimeMillis() - timer > 2500L) {
@@ -67,6 +74,13 @@ public class Strafe extends SpeedMode {
     }
 
     private Vector2d transformStrafe(double speed) {
+        TargetStrafe targetStrafe = Modules.get().get(TargetStrafe.class);
+        Vector2d fallback = transformInputStrafe(speed);
+        if (targetStrafe == null) return fallback;
+        return targetStrafe.getMovement(speed, fallback);
+    }
+
+    private Vector2d transformInputStrafe(double speed) {
         float forward = Math.signum(mc.player.input.getMovementInput().y);
         float side = Math.signum(mc.player.input.getMovementInput().x);
         float yaw = mc.player.getLerpedYaw(mc.getRenderTickCounter().getTickProgress(true));

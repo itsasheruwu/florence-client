@@ -8,6 +8,8 @@ package florencedevelopment.florenceclient.mixin;
 import com.llamalad7.mixinextras.sugar.Local;
 import florencedevelopment.florenceclient.systems.modules.Modules;
 import florencedevelopment.florenceclient.systems.modules.movement.NoSlow;
+import florencedevelopment.florenceclient.systems.modules.movement.speed.Speed;
+import florencedevelopment.florenceclient.systems.modules.movement.speed.SpeedModes;
 import net.minecraft.block.CobwebBlock;
 import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.Dynamic;
@@ -27,6 +29,11 @@ public abstract class CobwebBlockMixin {
         "method_9548(Lnet/minecraft/class_2680;Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;Lnet/minecraft/class_1297;Lnet/minecraft/class_10774;)V" // 1.21.9 intermediary
     }, at = @At("HEAD"), cancellable = true)
     private void onEntityCollision(CallbackInfo ci, @Local(argsOnly = true) Entity entity) {
-        if (entity == mc.player && Modules.get().get(NoSlow.class).cobweb()) ci.cancel();
+        if (entity != mc.player) return;
+
+        Speed speed = Modules.get().get(Speed.class);
+        boolean strafeSpeed = speed.isActive() && speed.speedMode.get() == SpeedModes.Strafe;
+
+        if (Modules.get().get(NoSlow.class).cobweb() && !strafeSpeed) ci.cancel();
     }
 }

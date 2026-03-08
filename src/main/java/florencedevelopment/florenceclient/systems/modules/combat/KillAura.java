@@ -18,6 +18,8 @@ import florencedevelopment.florenceclient.utils.entity.SortPriority;
 import florencedevelopment.florenceclient.utils.entity.Target;
 import florencedevelopment.florenceclient.utils.entity.TargetUtils;
 import florencedevelopment.florenceclient.utils.entity.fakeplayer.FakePlayerEntity;
+import florencedevelopment.florenceclient.utils.entity.simulator.ProjectileEntitySimulator;
+import florencedevelopment.florenceclient.utils.entity.simulator.SimulationStep;
 import florencedevelopment.florenceclient.utils.player.FindItemResult;
 import florencedevelopment.florenceclient.utils.player.InvUtils;
 import florencedevelopment.florenceclient.utils.player.PlayerUtils;
@@ -28,6 +30,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
+import net.minecraft.entity.mob.BreezeEntity;
 import net.minecraft.entity.mob.EndermanEntity;
 import net.minecraft.entity.mob.PiglinEntity;
 import net.minecraft.entity.mob.ZombifiedPiglinEntity;
@@ -38,6 +41,8 @@ import net.minecraft.item.*;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
@@ -96,6 +101,9 @@ public class KillAura extends Module {
     private static final float MIN_BOW_CHARGE_TO_SHOOT = 0.5f;
     /** Max range to consider targets for bow (full-charge arrow reach). */
     private static final double BOW_MAX_RANGE = 50;
+    private static final int BOW_SIMULATION_STEPS = 200;
+    private static final int BOW_RETRY_COOLDOWN = 10;
+    private final ProjectileEntitySimulator bowSimulator = new ProjectileEntitySimulator();
 
     private float minBowVelocityToReach(Entity target) {
         Vec3d pos = target.getEntityPos();
@@ -108,6 +116,56 @@ public class KillAura extends Module {
         float minVelSq = (float) Math.max(0, term);
         float minVel = (float) Math.sqrt(minVelSq);
         return Math.min(1.0f, minVel);
+    }
+
+    private double getMeleeRange() {
+        return Math.max(range.get(), mc.player.getEntityInteractionRange());
+    }
+
+    private boolean isInRange(Box hitbox, double maxRange) {
+        return PlayerUtils.isWithin(
+            MathHelper.clamp(mc.player.getX(), hitbox.minX, hitbox.maxX),
+            MathHelper.clamp(mc.player.getY(), hitbox.minY, hitbox.maxY),
+            MathHelper.clamp(mc.player.getZ(), hitbox.minZ, hitbox.maxZ),
+            maxRange
+        );
+    }
+
+    private boolean canUseBowAgainst(Entity entity) {
+        return !(entity instanceof BreezeEntity);
+    }
+
+    private boolean canLandBowShot(Entity target, ItemStack bowStack) {
+        float pitch = computeBowPitch(target, 1.0f);
+        if (Float.isNaN(pitch)) return false;
+
+        boolean wasRotating = Rotations.rotating;
+        float previousYaw = Rotations.serverYaw;
+        float previousPitch = Rotations.serverPitch;
+
+        try {
+            Rotations.rotating = true;
+            Rotations.serverYaw = (float) Rotations.getYaw(target);
+            Rotations.serverPitch = pitch;
+
+            if (!bowSimulator.set(mc.player, bowStack, 0, false, mc.getRenderTickCounter().getTickProgress(true))) return false;
+
+            for (int i = 0; i < BOW_SIMULATION_STEPS; i++) {
+                SimulationStep step = bowSimulator.tick();
+
+                for (HitResult result : step.hitResults) {
+                    if (result instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == target) return true;
+                }
+
+                if (step.shouldStop) return false;
+            }
+        } finally {
+            Rotations.rotating = wasRotating;
+            Rotations.serverYaw = previousYaw;
+            Rotations.serverPitch = previousPitch;
+        }
+
+        return false;
     }
 
     private final Setting<Boolean> swapBack = sgGeneral.add(new BoolSetting.Builder()
@@ -282,7 +340,7 @@ public class KillAura extends Module {
 
     private final static ArrayList<Item> FILTER = new ArrayList<>(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_AXE, Items.DIAMOND_PICKAXE, Items.DIAMOND_SHOVEL, Items.DIAMOND_HOE, Items.MACE, Items.DIAMOND_SPEAR, Items.TRIDENT));
     private final List<Entity> targets = new ArrayList<>();
-    private int switchTimer, hitTimer;
+    private int switchTimer, hitTimer, bowRetryTimer;
     private boolean wasPathing = false;
     public boolean attacking, swapped;
     private boolean bowCharging = false;
@@ -297,6 +355,7 @@ public class KillAura extends Module {
         previousSlot = -1;
         swapped = false;
         bowCharging = false;
+        bowRetryTimer = 0;
     }
 
     @Override
@@ -307,6 +366,8 @@ public class KillAura extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        if (bowRetryTimer > 0) bowRetryTimer--;
+
         if (!mc.player.isAlive() || PlayerUtils.getGameMode() == GameMode.SPECTATOR) {
             stopAttacking();
             return;
@@ -348,7 +409,9 @@ public class KillAura extends Module {
         }
 
         Entity primary = targets.getFirst();
-        double distance = PlayerUtils.distanceTo(primary);
+        double meleeRange = getMeleeRange();
+        boolean primaryInMeleeRange = isInRange(primary.getBoundingBox(), meleeRange);
+        boolean primaryInBowRange = isInRange(primary.getBoundingBox(), BOW_MAX_RANGE);
         boolean isBowCharging = bowCharging && InvUtils.testInMainHand(Items.BOW) && mc.player.isUsingItem();
 
         if (isBowCharging) {
@@ -360,12 +423,20 @@ public class KillAura extends Module {
                 releaseBowAndStop();
                 return;
             }
+            if (!canLandBowShot(primary, mc.player.getMainHandStack())) {
+                abortBowRetry();
+                return;
+            }
             rotateBowAim(primary);
             float currentVelocity = BowItem.getPullProgress(mc.player.getItemUseTime());
             float minVelocity = minBowVelocityToReach(primary);
             boolean fullCharge = mc.player.getItemUseTime() >= 20;
             float pitch = computeBowPitch(primary, currentVelocity);
             boolean trajectoryValid = !Float.isNaN(pitch);
+            if (fullCharge && !trajectoryValid) {
+                abortBowRetry();
+                return;
+            }
             boolean chargeEnough = fullCharge || currentVelocity >= minVelocity;
             boolean chargeAccurate = currentVelocity >= MIN_BOW_CHARGE_TO_SHOOT;
             if (trajectoryValid && chargeEnough && chargeAccurate) {
@@ -380,9 +451,13 @@ public class KillAura extends Module {
             return;
         }
 
-        if (bowBot.get() && distance > range.get() && distance <= BOW_MAX_RANGE && hasBowAndArrows() && PlayerUtils.canSeeEntity(primary)) {
+        if (bowRetryTimer <= 0 && bowBot.get() && !primaryInMeleeRange && primaryInBowRange && hasBowAndArrows() && PlayerUtils.canSeeEntity(primary) && canUseBowAgainst(primary)) {
             FindItemResult bowResult = InvUtils.find(itemStack -> itemStack.isOf(Items.BOW), 0, 8);
             if (!bowResult.found()) return;
+            if (!canLandBowShot(primary, mc.player.getInventory().getStack(bowResult.slot()))) {
+                bowRetryTimer = BOW_RETRY_COOLDOWN;
+                return;
+            }
 
             if (!InvUtils.testInMainHand(Items.BOW)) {
                 previousSlot = mc.player.getInventory().getSelectedSlot();
@@ -401,7 +476,7 @@ public class KillAura extends Module {
             return;
         }
 
-        if (distance > range.get()) return;
+        if (!primaryInMeleeRange) return;
 
         if (autoSwitch.get()) {
             FindItemResult weaponResult = new FindItemResult(mc.player.getInventory().getSelectedSlot(), -1);
@@ -468,6 +543,11 @@ public class KillAura extends Module {
         stopAttacking();
     }
 
+    private void abortBowRetry() {
+        bowRetryTimer = BOW_RETRY_COOLDOWN;
+        releaseBowAndStop();
+    }
+
     private boolean hasBowAndArrows() {
         if (!InvUtils.find(itemStack -> itemStack.isOf(Items.BOW), 0, 8).found()) return false;
         return mc.player.getAbilities().creativeMode || InvUtils.find(itemStack -> itemStack.getItem() instanceof ArrowItem).found();
@@ -521,18 +601,8 @@ public class KillAura extends Module {
         if ((entity instanceof LivingEntity livingEntity && livingEntity.isDead()) || !entity.isAlive()) return false;
 
         Box hitbox = entity.getBoundingBox();
-        boolean inMeleeRange = PlayerUtils.isWithin(
-            MathHelper.clamp(mc.player.getX(), hitbox.minX, hitbox.maxX),
-            MathHelper.clamp(mc.player.getY(), hitbox.minY, hitbox.maxY),
-            MathHelper.clamp(mc.player.getZ(), hitbox.minZ, hitbox.maxZ),
-            range.get()
-        );
-        boolean inBowRange = bowBot.get() && PlayerUtils.isWithin(
-            MathHelper.clamp(mc.player.getX(), hitbox.minX, hitbox.maxX),
-            MathHelper.clamp(mc.player.getY(), hitbox.minY, hitbox.maxY),
-            MathHelper.clamp(mc.player.getZ(), hitbox.minZ, hitbox.maxZ),
-            BOW_MAX_RANGE
-        );
+        boolean inMeleeRange = isInRange(hitbox, getMeleeRange());
+        boolean inBowRange = bowBot.get() && canUseBowAgainst(entity) && isInRange(hitbox, BOW_MAX_RANGE);
         if (!inMeleeRange && !inBowRange) return false;
 
         if (!entities.get().contains(entity.getType())) return false;
