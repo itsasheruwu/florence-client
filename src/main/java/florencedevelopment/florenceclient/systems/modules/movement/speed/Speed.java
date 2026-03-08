@@ -15,6 +15,7 @@ import florencedevelopment.florenceclient.systems.modules.Modules;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.modes.Strafe;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.modes.Vanilla;
 import florencedevelopment.florenceclient.systems.modules.world.Timer;
+import florencedevelopment.florenceclient.utils.entity.EntityUtils;
 import florencedevelopment.florenceclient.utils.player.PlayerUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.MovementType;
@@ -57,6 +58,25 @@ public class Speed extends Module {
         .description("Limits your speed on servers with very strict anticheats.")
         .visible(() -> speedMode.get() == SpeedModes.Strafe)
         .defaultValue(false)
+        .build()
+    );
+
+    public final Setting<Boolean> strafeDamageBoost = sgGeneral.add(new BoolSetting.Builder()
+        .name("damage-boost")
+        .description("Boosts strafe speed while you are taking knockback damage.")
+        .visible(() -> speedMode.get() == SpeedModes.Strafe)
+        .defaultValue(false)
+        .build()
+    );
+
+    public final Setting<Double> strafeDamageBoostMultiplier = sgGeneral.add(new DoubleSetting.Builder()
+        .name("damage-boost-multiplier")
+        .description("How much to multiply strafe speed by after taking damage.")
+        .visible(() -> speedMode.get() == SpeedModes.Strafe && strafeDamageBoost.get())
+        .defaultValue(1.2)
+        .min(0)
+        .sliderMin(0)
+        .sliderMax(3)
         .build()
     );
 
@@ -113,7 +133,11 @@ public class Speed extends Module {
 
     @EventHandler
     private void onPlayerMove(PlayerMoveEvent event) {
-        if (event.type != MovementType.SELF || stopSpeed()) return;
+        if (event.type != MovementType.SELF) return;
+        if (stopSpeed()) {
+            Modules.get().get(Timer.class).setOverride(Timer.OFF);
+            return;
+        }
 
         if (timer.get() != Timer.OFF) {
             Modules.get().get(Timer.class).setOverride(PlayerUtils.isMoving() ? timer.get() : Timer.OFF);
@@ -143,6 +167,7 @@ public class Speed extends Module {
 
     private boolean stopSpeed() {
         if (mc.player.isGliding() || mc.player.isClimbing() || mc.player.getVehicle() != null) return true;
+        if (speedMode.get() == SpeedModes.Strafe && EntityUtils.isInCobweb(mc.player)) return true;
         if (!whenSneaking.get() && mc.player.isSneaking()) return true;
         if (vanillaOnGround.get() && !mc.player.isOnGround() && speedMode.get() == SpeedModes.Vanilla) return true;
         return !inLiquids.get() && (mc.player.isTouchingWater() || mc.player.isInLava());
