@@ -24,6 +24,7 @@ import net.minecraft.util.Hand;
 
 public class MaceAssist extends Module {
     private static final double NEAR_READY_BUFFER = 0.75;
+    private static final int HIT_LOCKOUT_TICKS = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -82,6 +83,7 @@ public class MaceAssist extends Module {
 
     private PlayerEntity target;
     private State state = State.Idle;
+    private int hitLockout;
 
     public MaceAssist() {
         super(Categories.Combat, "mace-assist", "Tracks targets, lines up mace smash hits, and can auto-swing when the hit is ready.");
@@ -91,11 +93,12 @@ public class MaceAssist extends Module {
     public void onDeactivate() {
         target = null;
         state = State.Idle;
+        hitLockout = 0;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        target = null;
+        if (hitLockout > 0) hitLockout--;
         state = State.Idle;
 
         if (!isHoldingMace()) return;
@@ -118,9 +121,10 @@ public class MaceAssist extends Module {
         }
 
         if (rotate.get() && (state == State.Ready || state == State.Tracking)) {
-            Runnable callback = state == State.Ready && autoHit.get() ? this::tryAttack : null;
-            Rotations.rotate(Rotations.getYaw(target), Rotations.getPitch(target, aimTarget.get()), 25, callback);
-        } else if (state == State.Ready && autoHit.get()) {
+            Rotations.rotate(Rotations.getYaw(target), Rotations.getPitch(target, aimTarget.get()), 25);
+        }
+
+        if (state == State.Ready && autoHit.get()) {
             tryAttack();
         }
     }
@@ -152,6 +156,7 @@ public class MaceAssist extends Module {
     private void tryAttack() {
         if (!autoHit.get()) return;
         if (target == null || mc.player == null || mc.interactionManager == null) return;
+        if (hitLockout > 0) return;
         if (TargetUtils.isBadTarget(target, range.get())) return;
         if (!isHoldingMace()) return;
         if (mc.player.getAttackCooldownProgress(0.5f) < 1.0f) return;
@@ -159,6 +164,7 @@ public class MaceAssist extends Module {
 
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
+        hitLockout = HIT_LOCKOUT_TICKS;
     }
 
     private enum State {

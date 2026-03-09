@@ -6,6 +6,7 @@
 package florencedevelopment.florenceclient.gui.widgets.containers;
 
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
+import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.utils.Cell;
 import florencedevelopment.florenceclient.gui.utils.WindowConfig;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
@@ -21,6 +22,7 @@ import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT;
 
 public abstract class WWindow extends WVerticalList {
     public double padding = 8;
+    public double fixedWidth = -1;
     public Consumer<WContainer> beforeHeaderInit;
     public String id;
 
@@ -61,6 +63,15 @@ public abstract class WWindow extends WVerticalList {
     }
 
     protected abstract WHeader header(WWidget icon);
+
+    @Override
+    public void calculateSize() {
+        super.calculateSize();
+
+        if (fixedWidth > 0) {
+            width = Math.round(theme.scale(fixedWidth));
+        }
+    }
 
     @Override
     public <T extends WWidget> Cell<T> add(T widget) {
@@ -120,6 +131,29 @@ public abstract class WWindow extends WVerticalList {
         if (scissor) renderer.scissorEnd();
 
         return toReturn;
+    }
+
+    protected void moveTo(double x, double y) {
+        double targetX = x;
+        double targetY = y;
+
+        if (theme instanceof FlorenceGuiTheme florenceTheme && florenceTheme.snapToGrid()) {
+            double gridSize = Math.max(1, Math.round(theme.scale(16)));
+            targetX = Math.round(targetX / gridSize) * gridSize;
+            targetY = Math.round(targetY / gridSize) * gridSize;
+        }
+
+        move(targetX - this.x, targetY - this.y);
+
+        moved = true;
+        movedX = this.x;
+        movedY = this.y;
+
+        if (id != null) {
+            WindowConfig config = theme.getWindowConfig(id);
+            config.x = this.x;
+            config.y = this.y;
+        }
     }
 
     @Override
@@ -217,19 +251,7 @@ public abstract class WWindow extends WVerticalList {
         @Override
         public void onMouseMoved(double mouseX, double mouseY, double lastMouseX, double lastMouseY) {
             if (dragging) {
-                WWindow.this.move(mouseX - lastMouseX, mouseY - lastMouseY);
-
-                moved = true;
-                movedX = x;
-                movedY = y;
-
-                if (id != null) {
-                    WindowConfig config = theme.getWindowConfig(id);
-
-                    config.x = x;
-                    config.y = y;
-                }
-
+                WWindow.this.moveTo(WWindow.this.x + (mouseX - lastMouseX), WWindow.this.y + (mouseY - lastMouseY));
                 dragged = true;
             }
         }

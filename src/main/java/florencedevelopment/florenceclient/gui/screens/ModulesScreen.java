@@ -119,6 +119,8 @@ public class ModulesScreen extends TabScreen {
     protected WWindow createSearch(WContainer c) {
         WWindow w = theme.window("Search");
         w.id = "search";
+        w.fixedWidth = 320;
+        w.minWidth = theme.scale(320);
 
         if (theme.categoryIcons()) {
             w.beforeHeaderInit = wContainer -> wContainer.add(theme.item(Items.COMPASS.getDefaultStack())).pad(2);
@@ -238,6 +240,8 @@ public class ModulesScreen extends TabScreen {
     protected class WCategoryController extends WContainer {
         public final List<WWindow> windows = new ArrayList<>();
         private Cell<WWindow> favorites;
+        private WWindow hoveredWindow;
+        private WWindow activeWindow;
 
         @Override
         public void init() {
@@ -276,18 +280,18 @@ public class ModulesScreen extends TabScreen {
         @Override
         protected void onCalculateWidgetPositions() {
             double pad = theme.scale(4);
-            double h = theme.scale(40);
-
             double x = this.x + pad;
             double y = this.y;
+            double rowHeight = 0;
 
             for (Cell<?> cell : cells) {
                 double windowWidth = getWindowWidth();
                 double windowHeight = getWindowHeight();
 
                 if (x + cell.width > windowWidth) {
-                    x = x + pad;
-                    y += h;
+                    x = this.x + pad;
+                    y += rowHeight + pad;
+                    rowHeight = 0;
                 }
 
                 if (x > windowWidth) {
@@ -307,8 +311,81 @@ public class ModulesScreen extends TabScreen {
 
                 cell.alignWidget();
 
+                rowHeight = Math.max(rowHeight, cell.height);
                 x += cell.width + pad;
             }
+        }
+
+        @Override
+        public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
+            Cell<?> topCell = findTopWindowCell(click.x(), click.y());
+            if (topCell == null) return false;
+
+            bringToFront(topCell);
+
+            hoveredWindow = (WWindow) topCell.widget();
+            activeWindow = hoveredWindow;
+
+            return hoveredWindow.mouseClicked(click, doubled);
+        }
+
+        @Override
+        public boolean mouseReleased(net.minecraft.client.gui.Click click) {
+            WWindow targetWindow = activeWindow != null ? activeWindow : hoveredWindow;
+            activeWindow = null;
+
+            if (targetWindow == null) return false;
+            return targetWindow.mouseReleased(click);
+        }
+
+        @Override
+        public void mouseMoved(double mouseX, double mouseY, double lastMouseX, double lastMouseY) {
+            if (activeWindow == null) {
+                Cell<?> hoveredCell = findTopWindowCell(mouseX, mouseY);
+                hoveredWindow = hoveredCell != null ? (WWindow) hoveredCell.widget() : null;
+            }
+
+            WWindow targetWindow = activeWindow != null ? activeWindow : hoveredWindow;
+
+            for (Cell<?> cell : cells) {
+                WWindow window = (WWindow) cell.widget();
+
+                if (window == targetWindow) {
+                    window.mouseMoved(mouseX, mouseY, lastMouseX, lastMouseY);
+                } else {
+                    window.mouseMoved(-1, -1, -1, -1);
+                }
+            }
+
+            mouseOver = targetWindow != null && isOver(mouseX, mouseY);
+        }
+
+        @Override
+        public boolean mouseScrolled(double amount) {
+            WWindow targetWindow = activeWindow != null ? activeWindow : hoveredWindow;
+            if (targetWindow == null) return false;
+
+            return targetWindow.mouseScrolled(amount);
+        }
+
+        private Cell<?> findTopWindowCell(double mouseX, double mouseY) {
+            for (int i = cells.size() - 1; i >= 0; i--) {
+                Cell<?> cell = cells.get(i);
+                if (cell.widget().isOver(mouseX, mouseY)) return cell;
+            }
+
+            return null;
+        }
+
+        private void bringToFront(Cell<?> topCell) {
+            if (cells.getLast() == topCell) return;
+
+            cells.remove(topCell);
+            cells.add(topCell);
+
+            WWindow window = (WWindow) topCell.widget();
+            windows.remove(window);
+            windows.add(window);
         }
     }
 }

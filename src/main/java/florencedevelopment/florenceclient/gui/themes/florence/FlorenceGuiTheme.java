@@ -129,6 +129,13 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
+    public final Setting<Boolean> snapToGrid = sgGeneral.add(new BoolSetting.Builder()
+        .name("snap-to-grid")
+        .description("Snap click GUI windows to a grid while dragging.")
+        .defaultValue(false)
+        .build()
+    );
+
     // Colors
 
     public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", accountColor(new SettingColor(100, 150, 255), new SettingColor(168, 85, 247)));
@@ -461,6 +468,10 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     public boolean smoothAnimations() {
         return smoothAnimations.get();
+    }
+
+    public boolean snapToGrid() {
+        return snapToGrid.get();
     }
 
     public SettingColor accentSecondaryColor() {
