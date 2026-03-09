@@ -52,6 +52,23 @@ public class ActiveModulesHud extends HudElement {
         .build()
     );
 
+    private final Setting<Boolean> toggleAnimation = sgGeneral.add(new BoolSetting.Builder()
+        .name("toggle-animation")
+        .description("Animates modules when they are toggled on or off in the list.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Double> toggleAnimationSpeed = sgGeneral.add(new DoubleSetting.Builder()
+        .name("toggle-animation-speed")
+        .description("How quickly the toggle animation plays.")
+        .defaultValue(24)
+        .min(1)
+        .sliderRange(1, 60)
+        .visible(toggleAnimation::get)
+        .build()
+    );
+
     private final Setting<Boolean> shadow = sgGeneral.add(new BoolSetting.Builder()
         .name("shadow")
         .description("Renders shadow behind text.")
@@ -182,7 +199,8 @@ public class ActiveModulesHud extends HudElement {
         .build()
     );
 
-    private final List<Module> modules = new ArrayList<>();
+    private final List<ModuleEntry> moduleEntries = new ArrayList<>();
+    private final List<ModuleEntry> visibleEntries = new ArrayList<>();
 
     private final Color rainbow = new Color(255, 255, 255);
     private double rainbowHue1;
@@ -199,31 +217,36 @@ public class ActiveModulesHud extends HudElement {
 
     @Override
     public void tick(HudRenderer renderer) {
-        modules.clear();
+        List<Module> activeModules = new ArrayList<>();
 
         for (Module module : Modules.get().getActive()) {
-            if (!hiddenModules.get().contains(module)) modules.add(module);
+            if (!hiddenModules.get().contains(module)) activeModules.add(module);
         }
 
-        if (modules.isEmpty()) {
+        syncEntries(activeModules);
+        updateAnimationProgress(renderer);
+        rebuildVisibleEntries();
+
+        if (visibleEntries.isEmpty()) {
             if (isInEditor()) {
                 setSize(renderer.textWidth("Active Modules", shadow.get(), getScale()), renderer.textHeight(shadow.get(), getScale()));
             }
             return;
         }
 
-        modules.sort((e1, e2) -> switch (sort.get()) {
-            case Alphabetical -> e1.title.compareTo(e2.title);
-            case Biggest -> Double.compare(getModuleWidth(renderer, e2), getModuleWidth(renderer, e1));
-            case Smallest -> Double.compare(getModuleWidth(renderer, e1), getModuleWidth(renderer, e2));
+        visibleEntries.sort((e1, e2) -> switch (sort.get()) {
+            case Alphabetical -> e1.module.title.compareTo(e2.module.title);
+            case Biggest -> Double.compare(getModuleWidth(renderer, e2.module), getModuleWidth(renderer, e1.module));
+            case Smallest -> Double.compare(getModuleWidth(renderer, e1.module), getModuleWidth(renderer, e2.module));
         });
 
         double width = 0;
         double height = 0;
+        double lineHeight = renderer.textHeight(shadow.get(), getScale());
 
-        for (Module module : modules) {
-            width = Math.max(width, getModuleWidth(renderer, module));
-            height += renderer.textHeight(shadow.get(), getScale());
+        for (ModuleEntry entry : visibleEntries) {
+            width = Math.max(width, getModuleWidth(renderer, entry.module));
+            height += lineHeight * getRenderProgress(entry);
         }
 
         setSize(width, height);
@@ -234,7 +257,7 @@ public class ActiveModulesHud extends HudElement {
         double x = this.x;
         double y = this.y;
 
-        if (modules.isEmpty()) {
+        if (visibleEntries.isEmpty()) {
             if (isInEditor()) {
                 renderer.text("Active Modules", x, y, WHITE, shadow.get(), getScale());
             }
@@ -250,17 +273,19 @@ public class ActiveModulesHud extends HudElement {
         lastX = x;
         emptySpace = renderer.textWidth(" ", shadow.get(), getScale());
 
-        for (int i = 0; i < modules.size(); i++) {
-            double offset = alignX(getModuleWidth(renderer, modules.get(i)), alignment.get());
-            renderModule(renderer, i, x + offset, y);
+        for (int i = 0; i < visibleEntries.size(); i++) {
+            ModuleEntry entry = visibleEntries.get(i);
+            double offset = alignX(getModuleWidth(renderer, entry.module), alignment.get());
+            double renderX = renderModule(renderer, entry, i, x + offset, y);
 
-            lastX = x + offset;
-            y += renderer.textHeight(shadow.get(), getScale());
+            lastX = renderX;
+            y += renderer.textHeight(shadow.get(), getScale()) * getRenderProgress(entry);
         }
     }
 
-    private void renderModule(HudRenderer renderer, int index, double x, double y) {
-        Module module = modules.get(index);
+    private double renderModule(HudRenderer renderer, ModuleEntry entry, int index, double x, double y) {
+        Module module = entry.module;
+        double progress = getRenderProgress(entry);
         Color color = flatColor.get();
 
         switch (colorMode.get()) {
@@ -275,21 +300,24 @@ public class ActiveModulesHud extends HudElement {
             }
         }
 
-        renderer.text(module.title, x, y, color, shadow.get(), getScale());
+        double slideOffset = toggleAnimation.get() ? renderer.textHeight(shadow.get(), getScale()) * (1 - progress) : 0;
+        double renderX = x + slideOffset;
+
+        renderer.text(module.title, renderX, y, withAlpha(color, progress), shadow.get(), getScale());
 
         double textHeight = renderer.textHeight(shadow.get(), getScale());
         double textLength = renderer.textWidth(module.title, shadow.get(), getScale());
 
         if (showKeybind.get() && module.keybind.isSet()) {
             String keybindStr = " [" + module.keybind + "]";
-            renderer.text(keybindStr, x + textLength, y, moduleInfoColor.get(), shadow.get(), getScale());
+            renderer.text(keybindStr, renderX + textLength, y, withAlpha(moduleInfoColor.get(), progress), shadow.get(), getScale());
             textLength += renderer.textWidth(keybindStr, shadow.get(), getScale());
         }
 
         if (activeInfo.get()) {
             String info = module.getInfoString();
             if (info != null) {
-                renderer.text(info, x + textLength + emptySpace, y, moduleInfoColor.get(), shadow.get(), getScale());
+                renderer.text(info, renderX + textLength + emptySpace, y, withAlpha(moduleInfoColor.get(), progress), shadow.get(), getScale());
                 textLength += emptySpace + renderer.textWidth(info, shadow.get(), getScale());
             }
         }
@@ -302,42 +330,97 @@ public class ActiveModulesHud extends HudElement {
                 lineStartY -= 2;
                 lineHeight += 2;
 
-                renderer.quad(x - 2 - outlineWidth.get(), lineStartY - outlineWidth.get(),
+                renderer.quad(renderX - 2 - outlineWidth.get(), lineStartY - outlineWidth.get(),
                     textLength + 4 + 2 * outlineWidth.get(),
-                    outlineWidth.get(), prevColor, prevColor, color, color);
+                    outlineWidth.get(), withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress));
             } else { // In-between quads are rendered above the current line so don't need for the top
-                renderer.quad(Math.min(lastX, x) - 2 - outlineWidth.get(), Math.max(lastX, x) == x ? y : y - outlineWidth.get(),
-                    (Math.max(lastX, x) - 2) - (Math.min(lastX, x) - 2 - outlineWidth.get()), outlineWidth.get(),
-                    prevColor, prevColor, color, color); // Left in-between quad
+                renderer.quad(Math.min(lastX, renderX) - 2 - outlineWidth.get(), Math.max(lastX, renderX) == renderX ? y : y - outlineWidth.get(),
+                    (Math.max(lastX, renderX) - 2) - (Math.min(lastX, renderX) - 2 - outlineWidth.get()), outlineWidth.get(),
+                    withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress)); // Left in-between quad
 
-                renderer.quad(Math.min(lastX + prevTextLength, x + textLength) + 2, Math.min(lastX + prevTextLength, x + textLength) == x + textLength ? y : y - outlineWidth.get(),
-                    (Math.max(lastX + prevTextLength, x + textLength) + 2 + outlineWidth.get()) - (Math.min(lastX + prevTextLength, x + textLength) + 2), outlineWidth.get(),
-                    prevColor, prevColor, color, color); // Right in-between quad
+                renderer.quad(Math.min(lastX + prevTextLength, renderX + textLength) + 2, Math.min(lastX + prevTextLength, renderX + textLength) == renderX + textLength ? y : y - outlineWidth.get(),
+                    (Math.max(lastX + prevTextLength, renderX + textLength) + 2 + outlineWidth.get()) - (Math.min(lastX + prevTextLength, renderX + textLength) + 2), outlineWidth.get(),
+                    withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress)); // Right in-between quad
             }
 
-            if (index == modules.size() - 1) { // Render bottom quad for last item in list
+            if (index == visibleEntries.size() - 1) { // Render bottom quad for last item in list
                 lineHeight += 2;
 
-                renderer.quad(x - 2 - outlineWidth.get(), lineStartY + lineHeight,
+                renderer.quad(renderX - 2 - outlineWidth.get(), lineStartY + lineHeight,
                     textLength + 4 + 2 * outlineWidth.get(), outlineWidth.get(),
-                    prevColor, prevColor, color, color);
+                    withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress));
             }
 
             // Left side quad
-            renderer.quad(x - 2 - outlineWidth.get(), lineStartY, outlineWidth.get(), lineHeight,
-                prevColor, prevColor, color, color);
+            renderer.quad(renderX - 2 - outlineWidth.get(), lineStartY, outlineWidth.get(), lineHeight,
+                withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress));
 
             // Right side quad
-            renderer.quad(x + textLength + 2, lineStartY, outlineWidth.get(), lineHeight,
-                prevColor, prevColor, color, color);
+            renderer.quad(renderX + textLength + 2, lineStartY, outlineWidth.get(), lineHeight,
+                withAlpha(prevColor, progress), withAlpha(prevColor, progress), withAlpha(color, progress), withAlpha(color, progress));
         }
 
         if (background.get()) {
-            renderer.quad( x - 2, lineStartY, textLength + 4, lineHeight, backgroundColor.get());
+            renderer.quad(renderX - 2, lineStartY, textLength + 4, lineHeight, withAlpha(backgroundColor.get(), progress));
         }
 
         prevTextLength = textLength;
         prevColor = color;
+        return renderX;
+    }
+
+    private void syncEntries(List<Module> activeModules) {
+        for (Module module : activeModules) {
+            ModuleEntry entry = getEntry(module);
+            if (entry == null) moduleEntries.add(new ModuleEntry(module));
+            else entry.visible = true;
+        }
+
+        for (ModuleEntry entry : moduleEntries) {
+            if (!activeModules.contains(entry.module)) entry.visible = false;
+        }
+    }
+
+    private void updateAnimationProgress(HudRenderer renderer) {
+        if (!toggleAnimation.get()) {
+            moduleEntries.removeIf(entry -> !entry.visible);
+            for (ModuleEntry entry : moduleEntries) entry.progress = 1;
+            return;
+        }
+
+        double animationDelta = Math.min(1, renderer.delta * toggleAnimationSpeed.get());
+
+        moduleEntries.removeIf(entry -> !entry.visible && entry.progress <= 0);
+        for (ModuleEntry entry : moduleEntries) {
+            entry.progress += animationDelta * (entry.visible ? 1 : -1);
+
+            if (entry.progress < 0) entry.progress = 0;
+            else if (entry.progress > 1) entry.progress = 1;
+        }
+    }
+
+    private void rebuildVisibleEntries() {
+        visibleEntries.clear();
+
+        for (ModuleEntry entry : moduleEntries) {
+            if (entry.visible || entry.progress > 0) visibleEntries.add(entry);
+        }
+    }
+
+    private ModuleEntry getEntry(Module module) {
+        for (ModuleEntry entry : moduleEntries) {
+            if (entry.module.equals(module)) return entry;
+        }
+
+        return null;
+    }
+
+    private double getRenderProgress(ModuleEntry entry) {
+        return toggleAnimation.get() ? entry.progress : 1;
+    }
+
+    private Color withAlpha(Color color, double progress) {
+        return new Color(color.r, color.g, color.b, (int) Math.round(color.a * progress));
     }
 
     private double getModuleWidth(HudRenderer renderer, Module module) {
@@ -375,5 +458,15 @@ public class ActiveModulesHud extends HudElement {
         None,
         Block,
         Text
+    }
+
+    private static class ModuleEntry {
+        private final Module module;
+        private boolean visible = true;
+        private double progress = 0;
+
+        private ModuleEntry(Module module) {
+            this.module = module;
+        }
     }
 }

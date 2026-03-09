@@ -61,6 +61,7 @@ public class Commands {
         add(new GiveCommand());
         add(new NameHistoryCommand());
         add(new BindCommand());
+        add(new UnbindCommand());
         add(new FovCommand());
         add(new RotationCommand());
         add(new WaypointCommand());
