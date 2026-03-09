@@ -18,6 +18,7 @@ import java.util.List;
 public class ActiveModulesHud extends HudElement {
     public static final HudElementInfo<ActiveModulesHud> INFO = new HudElementInfo<>(Hud.GROUP, "active-modules", "Displays your active modules.", ActiveModulesHud::new);
 
+    private static final double TOGGLE_ANIMATION_SPEED_MULTIPLIER = 100;
     private static final Color WHITE = new Color();
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -59,12 +60,12 @@ public class ActiveModulesHud extends HudElement {
         .build()
     );
 
-    private final Setting<Double> toggleAnimationSpeed = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Integer> toggleAnimationSpeed = sgGeneral.add(new IntSetting.Builder()
         .name("toggle-animation-speed")
         .description("How quickly the toggle animation plays.")
-        .defaultValue(24)
+        .defaultValue(1)
         .min(1)
-        .sliderRange(1, 60)
+        .sliderRange(1, 100)
         .visible(toggleAnimation::get)
         .build()
     );
@@ -388,7 +389,7 @@ public class ActiveModulesHud extends HudElement {
             return;
         }
 
-        double animationDelta = Math.min(1, renderer.delta * toggleAnimationSpeed.get());
+        double animationDelta = Math.min(1, renderer.delta * toggleAnimationSpeed.get() * TOGGLE_ANIMATION_SPEED_MULTIPLIER);
 
         moduleEntries.removeIf(entry -> !entry.visible && entry.progress <= 0);
         for (ModuleEntry entry : moduleEntries) {
