@@ -5,9 +5,8 @@
   "version": "${version}",
   "description": "Based utility mod.",
   "authors": [
-    "MineGame159",
-    "squidoodly",
-    "seasnail"
+    "Asher",
+    "Ender"
   ],
   "license": "GPL-3.0",
   "icon": "assets/florence-client/icon.png",

@@ -38,6 +38,8 @@ import static florencedevelopment.florenceclient.FlorenceClient.mc;
 
 public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidgetFactory {
     private static final SettingColor WHITE = new SettingColor();
+    private static final String DEFAULT_GROUP_NAME = "General";
+    private static final double NUMERIC_EDIT_MIN_WIDTH = 320;
 
     public FlorenceExpandableSettingsWidgetFactory(GuiTheme theme) {
         super(theme);
@@ -85,7 +87,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
 
         // Add all settings with compact spacing
         for (SettingGroup group : settings.groups) {
-            groupCompact(list, group, filter, removeInfoList);
+            groupCompact(list, group, filter, removeInfoList, settings.sizeGroups() > 1);
         }
 
         // Calculate width and set it as minimum width
@@ -106,11 +108,19 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
     }
 
     // Compact version of group() method with reduced spacing
-    private void groupCompact(WVerticalList list, SettingGroup group, String filter, List<RemoveInfo> removeInfoList) {
-        WSection section = list.add(theme.section(group.name, group.sectionExpanded)).expandX().widget();
-        section.action = () -> group.sectionExpanded = section.isExpanded();
+    private void groupCompact(WVerticalList list, SettingGroup group, String filter, List<RemoveInfo> removeInfoList, boolean hasMultipleGroups) {
+        boolean wrapInSection = hasMultipleGroups && !DEFAULT_GROUP_NAME.equals(group.name);
 
-        WTable table = section.add(theme.table()).expandX().widget();
+        WSection section = null;
+        WTable table;
+        if (wrapInSection) {
+            section = list.add(theme.section(group.name, group.sectionExpanded)).expandX().widget();
+            WSection wrappedSection = section;
+            section.action = () -> group.sectionExpanded = wrappedSection.isExpanded();
+            table = section.add(theme.table()).expandX().widget();
+        } else {
+            table = list.add(theme.table()).expandX().widget();
+        }
         // Reduce table spacing for compact layout
         table.verticalSpacing = 1.5; // vs 3 default
         table.horizontalSpacing = 2; // vs 3 default
@@ -158,7 +168,10 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
                 table.removeRow(rowIds.getInt(i) - i);
             }
 
-            if (table.cells.isEmpty()) list.cells.removeIf(cell -> cell.widget() == section);
+            if (table.cells.isEmpty()) {
+                if (section != null) list.cells.removeIf(cell -> cell.widget() == section);
+                else list.cells.removeIf(cell -> cell.widget() == table);
+            }
         }
     }
 
@@ -171,7 +184,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
     }
 
     private void intWNoReset(WTable table, IntSetting setting) {
-        WIntEdit edit = table.add(theme.intEdit(setting.get(), setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.noSlider)).expandX().widget();
+        WIntEdit edit = table.add(theme.intEdit(setting.get(), setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.noSlider)).minWidth(NUMERIC_EDIT_MIN_WIDTH).expandX().widget();
 
         edit.action = () -> {
             if (!setting.set(edit.get())) edit.set(setting.get());
@@ -181,7 +194,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
 
     private void doubleWNoReset(WTable table, DoubleSetting setting) {
         WDoubleEdit edit = theme.doubleEdit(setting.get(), setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.decimalPlaces, setting.noSlider);
-        table.add(edit).expandX();
+        table.add(edit).minWidth(NUMERIC_EDIT_MIN_WIDTH).expandX();
 
         Runnable action = () -> {
             if (!setting.set(edit.get())) edit.set(setting.get());
@@ -444,7 +457,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
     private WDoubleEdit addVectorComponentNoReset(WTable table, String label, double value, Consumer<Double> update, Vector3dSetting setting) {
         table.add(theme.label(label + ": "));
 
-        WDoubleEdit component = table.add(theme.doubleEdit(value, setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.decimalPlaces, setting.noSlider)).expandX().widget();
+        WDoubleEdit component = table.add(theme.doubleEdit(value, setting.min, setting.max, setting.sliderMin, setting.sliderMax, setting.decimalPlaces, setting.noSlider)).minWidth(NUMERIC_EDIT_MIN_WIDTH).expandX().widget();
         if (setting.onSliderRelease) {
             component.actionOnRelease = () -> {
                 update.accept(component.get());

@@ -147,13 +147,11 @@ public class ModulesScreen extends TabScreen {
     // Favorites
 
     protected Cell<WWindow> createFavorites(WContainer c) {
-        boolean hasFavorites = Modules.get().getAll().stream().anyMatch(module -> module.favorite);
-        if (!hasFavorites) return null;
-
         WWindow w = theme.window("Favorites");
         w.id = "favorites";
         w.padding = 0;
         w.spacing = 0;
+        w.minWidth = theme.scale(240);
 
         if (theme.categoryIcons()) {
             w.beforeHeaderInit = wContainer -> wContainer.add(theme.item(Items.NETHER_STAR.getDefaultStack())).pad(2);
@@ -179,11 +177,16 @@ public class ModulesScreen extends TabScreen {
 
         modules.sort((o1, o2) -> String.CASE_INSENSITIVE_ORDER.compare(o1.name, o2.name));
 
+        if (modules.isEmpty()) {
+            w.add(theme.label("Add favorites from module cards.")).pad(6);
+            return false;
+        }
+
         for (Module module : modules) {
             w.add(theme.module(module)).expandX();
         }
 
-        return !modules.isEmpty();
+        return true;
     }
 
     @Override
@@ -197,7 +200,16 @@ public class ModulesScreen extends TabScreen {
     }
 
     @Override
-    public void reload() {}
+    public void reload() {
+        clear();
+        initWidgets();
+        if (controller != null) controller.refresh();
+    }
+
+    public void refreshFavorites() {
+        if (controller != null) controller.refresh();
+        invalidate();
+    }
     
     @Override
     public void tick() {
@@ -252,17 +264,13 @@ public class ModulesScreen extends TabScreen {
         protected void refresh() {
             if (favorites == null) {
                 favorites = createFavorites(this);
-                if (favorites != null) windows.add(favorites.widget());
+                windows.add(favorites.widget());
             }
             else {
                 favorites.widget().clear();
-
-                if (!createFavoritesW(favorites.widget())) {
-                    remove(favorites);
-                    windows.remove(favorites.widget());
-                    favorites = null;
-                }
             }
+
+            createFavoritesW(favorites.widget());
         }
 
         @Override

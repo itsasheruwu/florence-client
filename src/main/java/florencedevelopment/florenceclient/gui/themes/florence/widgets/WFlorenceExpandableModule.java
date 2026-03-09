@@ -5,6 +5,7 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets;
 
+import florencedevelopment.florenceclient.gui.screens.ModulesScreen;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceExpandableSettingsWidgetFactory;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
@@ -29,6 +30,7 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
     private final Module module;
     private final String title;
     private final boolean canExpand;
+    private FlorenceExpandableSettingsWidgetFactory settingsFactory;
     
     private WModuleHeader header;
     private WSettingsContainer settingsContainer;
@@ -57,14 +59,14 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
     
     @Override
     public void init() {
+        settingsFactory = new FlorenceExpandableSettingsWidgetFactory(theme);
         header = add(new WModuleHeader()).expandX().widget();
         settingsContainer = add(new WSettingsContainer()).expandX().widget();
     }
     
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-        // Render border between modules (rgba(255, 255, 255, 0.05) from HTML example)
-        Color borderColor = new Color(255, 255, 255, (int)(255 * 0.05));
+        Color borderColor = new Color(theme().outlineColor.get(false, false).r, theme().outlineColor.get(false, false).g, theme().outlineColor.get(false, false).b, 70);
         renderer.quad(x, y + height - 1, width, 1, borderColor);
         
         super.onRender(renderer, mouseX, mouseY, delta);
@@ -179,6 +181,31 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
                 }
             }
         }
+
+        @Override
+        public boolean onMouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
+            if (isFavoriteButton(click.x(), click.y())) {
+                if (click.button() == GLFW_MOUSE_BUTTON_LEFT || click.button() == GLFW_MOUSE_BUTTON_RIGHT) {
+                    module.favorite = !module.favorite;
+                    if (mc.currentScreen instanceof ModulesScreen screen) screen.refreshFavorites();
+                    return true;
+                }
+            }
+
+            // Check for Shift+Right Click to bind key
+            if (click.button() == GLFW_MOUSE_BUTTON_RIGHT) {
+                // Check if shift is pressed using Minecraft client
+                if (mc.isShiftPressed()) {
+                    // Shift+Right Click to bind key
+                    Modules.get().setModuleToBind(module);
+                    return true; // Consume the event
+                }
+                // Regular right click is handled by onPressed to expand/collapse
+            }
+            
+            // Let the parent handle other clicks (toggle on left, expand on right)
+            return super.onMouseClicked(click, doubled);
+        }
         
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
@@ -204,12 +231,10 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
                 hoverProgress = mouseOver ? 1 : 0;
             }
             
-            // Background - dark with subtle hover effect (matching HTML example)
-            Color bgColor = new Color(20, 20, 20, 230); // rgba(20, 20, 20, 0.9)
+            Color bgColor = theme.backgroundColor.get(false, mouseOver);
             
             if (mouseOver && !module.isActive()) {
-                // Subtle hover effect (rgba(255, 255, 255, 0.03))
-                Color hoverOverlay = new Color(255, 255, 255, (int)(255 * 0.03));
+                Color hoverOverlay = new Color(theme.accentSecondaryColor().r, theme.accentSecondaryColor().g, theme.accentSecondaryColor().b, 22);
                 renderer.quad(x, y, width, height, bgColor);
                 renderer.quad(x, y, width, height, hoverOverlay);
             } else {
@@ -225,24 +250,33 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
             }
             
             // Module name on the left
-            double textX = x + pad;
-            Color textColor = new Color(236, 236, 236); // #ececec from HTML
+            double favoriteSize = theme.textHeight();
+            double favoriteX = x + pad;
+            double favoriteY = y + height / 2 - favoriteSize / 2;
+            double textX = favoriteX + favoriteSize + theme.scale(8);
+            Color textColor = theme.textColor.get();
             if (module.isActive()) {
-                textColor = theme.accentColor.get(); // Accent color when active
+                textColor = theme.accentColor.get();
             }
             renderer.text(title, textX, y + pad, textColor, false);
+
+            Color favoriteColor = module.favorite ? theme.favoriteColor.get() : theme.textSecondaryColor.get();
+            renderer.quad(
+                favoriteX,
+                favoriteY,
+                favoriteSize,
+                favoriteSize,
+                module.favorite ? GuiRenderer.FAVORITE_YES : GuiRenderer.FAVORITE_NO,
+                favoriteColor
+            );
             
             // Keybind tag (small, dark background)
-            String keybindText = module.keybind.toString();
             boolean isBinding = Modules.get().isBinding();
-            // Check if this module is the one being bound by checking if it was just set to bind
-            // We'll show "..." when binding mode is active (simplified approach)
+            boolean showKeybind = isBinding || module.keybind.isSet();
+            String keybindText = module.keybind.toString();
             if (isBinding) {
                 keybindText = "...";
-            } else if (keybindText.equals("None")) {
-                keybindText = "NONE";
-            } else {
-                // Convert to uppercase for display
+            } else if (showKeybind) {
                 keybindText = keybindText.toUpperCase();
             }
             
@@ -257,27 +291,24 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
             double dotY = y + height / 2 - dotSize / 2;
             Color dotColor = module.isActive() 
                 ? theme.accentColor.get() 
-                : new Color(68, 68, 68); // #444
+                : new Color(108, 74, 146);
             
-            // Calculate keybind tag position (before status dot)
-            double keybindTextWidth = theme.textWidth(keybindText);
-            double keybindTagWidth = keybindTextWidth + theme.scale(10); // Padding
-            double keybindTagHeight = theme.scale(14);
-            double keybindSpacing = theme.scale(8); // Space between keybind and dot
-            double keybindTagX = dotX - keybindSpacing - keybindTagWidth;
-            double keybindTagY = y + height / 2 - keybindTagHeight / 2;
-            
-            // Keybind tag background (#333 equivalent)
-            Color keybindBgColor = new Color(51, 51, 51); // #333
-            renderer.quad(keybindTagX, keybindTagY, keybindTagWidth, keybindTagHeight, keybindBgColor);
-            
-            // Keybind text
-            Color keybindTextColor = isBinding || module.keybind.isSet() 
-                ? theme.accentColor.get() 
-                : new Color(119, 119, 119); // #777
-            double keybindTextX = keybindTagX + theme.scale(5);
-            double keybindTextY = keybindTagY + (keybindTagHeight - theme.textHeight()) / 2;
-            renderer.text(keybindText, keybindTextX, keybindTextY, keybindTextColor, false);
+            if (showKeybind) {
+                double keybindTextWidth = theme.textWidth(keybindText);
+                double keybindTagWidth = keybindTextWidth + theme.scale(10);
+                double keybindTagHeight = theme.scale(14);
+                double keybindSpacing = theme.scale(8);
+                double keybindTagX = dotX - keybindSpacing - keybindTagWidth;
+                double keybindTagY = y + height / 2 - keybindTagHeight / 2;
+
+                Color keybindBgColor = new Color(67, 40, 101, 220);
+                renderer.quad(keybindTagX, keybindTagY, keybindTagWidth, keybindTagHeight, keybindBgColor);
+
+                Color keybindTextColor = theme.accentColor.get();
+                double keybindTextX = keybindTagX + theme.scale(5);
+                double keybindTextY = keybindTagY + (keybindTagHeight - theme.textHeight()) / 2;
+                renderer.text(keybindText, keybindTextX, keybindTextY, keybindTextColor, false);
+            }
             
             // Glow effect when active
             if (module.isActive() && theme.enableShadows()) {
@@ -310,7 +341,7 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
                     currentRotation = targetRotation;
                 }
 
-                Color chevronColor = new Color(236, 236, 236); // #ececec
+                Color chevronColor = theme.textColor.get();
                 boolean chevronHover = mouseX >= chevronX && mouseX <= chevronX + chevronSize &&
                     mouseY >= chevronY && mouseY <= chevronY + chevronSize;
                 if (chevronHover) {
@@ -321,33 +352,28 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
             }
         }
         
-        @Override
-        public boolean onMouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
-            // Check for Shift+Right Click to bind key
-            if (click.button() == GLFW_MOUSE_BUTTON_RIGHT) {
-                // Check if shift is pressed using Minecraft client
-                if (mc.isShiftPressed()) {
-                    // Shift+Right Click to bind key
-                    Modules.get().setModuleToBind(module);
-                    return true; // Consume the event
-                }
-                // Regular right click is handled by onPressed to expand/collapse
-            }
-            
-            // Let the parent handle other clicks (toggle on left, expand on right)
-            return super.onMouseClicked(click, doubled);
+        private boolean isFavoriteButton(double mouseX, double mouseY) {
+            FlorenceGuiTheme theme = theme();
+            double favoriteSize = theme.textHeight();
+            double favoriteX = x + theme.scale(12);
+            double favoriteY = y + height / 2 - favoriteSize / 2;
+
+            return mouseX >= favoriteX && mouseX <= favoriteX + favoriteSize && mouseY >= favoriteY && mouseY <= favoriteY + favoriteSize;
         }
     }
     
     private class WSettingsContainer extends WVerticalList implements FlorenceWidget {
         @Override
         public void init() {
-            if (!module.settings.groups.isEmpty()) {
-                // Use optimized factory for compact settings in expandable modules
-                FlorenceExpandableSettingsWidgetFactory factory = new FlorenceExpandableSettingsWidgetFactory(theme);
-                add(factory.create(theme, module.settings, "")).expandX();
-            }
+            rebuildSettings();
             spacing = theme.scale(1); // Reduced from 2 to 1 for more compact layout
+        }
+
+        private void rebuildSettings() {
+            clear();
+            if (!module.settings.groups.isEmpty()) {
+                add(settingsFactory.create(theme, module.settings, "")).expandX();
+            }
         }
         
         @Override
@@ -381,8 +407,7 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
                 return true;
             }
             
-            // Darker background for settings (rgba(0, 0, 0, 0.2) from HTML example)
-            Color bgColor = new Color(0, 0, 0, (int)(255 * 0.2));
+            Color bgColor = new Color(26, 10, 45, (int)(255 * 0.45));
             // Use animated height for smooth visual transition
             double visibleHeight = height * expandProgress;
             renderer.quad(x, y, width, visibleHeight, bgColor);
@@ -401,7 +426,27 @@ public class WFlorenceExpandableModule extends WContainer implements FlorenceWid
     
     public void tick() {
         if (settingsContainer != null && expanded) {
-            module.settings.tick(settingsContainer, theme);
+            boolean needsRefresh = false;
+
+            for (SettingGroup group : module.settings.groups) {
+                for (Setting<?> setting : group) {
+                    boolean visible = setting.isVisible();
+                    if (visible != setting.lastWasVisible) {
+                        needsRefresh = true;
+                    }
+
+                    setting.lastWasVisible = visible;
+                }
+            }
+
+            if (needsRefresh) {
+                settingsContainer.rebuildSettings();
+                WWidget widget = this;
+                while (widget != null) {
+                    widget.invalidate();
+                    widget = widget.parent;
+                }
+            }
         }
     }
 }

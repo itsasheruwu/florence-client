@@ -415,6 +415,7 @@ public class Modules extends System<Modules> {
         add(new Hitboxes());
         add(new HoleFiller());
         add(new KillAura());
+        add(new MaceAssist());
         add(new Offhand());
         add(new Quiver());
         add(new SelfAnvil());
@@ -556,6 +557,7 @@ public class Modules extends System<Modules> {
         add(new NoGhostBlocks());
         add(new Nuker());
         add(new PacketMine());
+        add(new PlayerHeadFinder());
         add(new StashFinder());
         add(new SpawnProofer());
         add(new Timer());

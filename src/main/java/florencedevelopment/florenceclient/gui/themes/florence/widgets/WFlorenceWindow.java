@@ -32,12 +32,11 @@ public class WFlorenceWindow extends WWindow implements FlorenceWidget {
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
         if (expanded || animProgress > 0) {
-            // Dark background matching HTML example (rgba(20, 20, 20, 0.9))
-            Color bgColor = new Color(20, 20, 20, (int)(255 * 0.9));
+            FlorenceGuiTheme florenceTheme = theme();
+            Color bgColor = florenceTheme.backgroundColor.get(false, false);
             renderer.quad(x, y + header.height, width, height - header.height, bgColor);
             
-            // Border styling (rgba(255, 255, 255, 0.1))
-            Color borderColor = new Color(255, 255, 255, (int)(255 * 0.1));
+            Color borderColor = florenceTheme.outlineColor.get(false, false);
             renderer.quad(x, y + header.height, width, 1, borderColor); // Top border
             renderer.quad(x, y + height - 1, width, 1, borderColor); // Bottom border
             renderer.quad(x, y + header.height, 1, height - header.height, borderColor); // Left border
@@ -128,7 +127,6 @@ public class WFlorenceWindow extends WWindow implements FlorenceWidget {
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
             FlorenceGuiTheme theme = theme();
             
-            // Solid accent color background (no gradient) matching HTML example
             Color accentColor = theme.accentColor.get();
             renderer.quad(x, y, width, height, accentColor);
         }

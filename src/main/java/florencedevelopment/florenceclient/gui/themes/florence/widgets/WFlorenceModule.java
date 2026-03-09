@@ -5,6 +5,7 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets;
 
+import florencedevelopment.florenceclient.gui.screens.ModulesScreen;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
@@ -21,6 +22,7 @@ import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT;
 public class WFlorenceModule extends WPressable implements FlorenceWidget {
     private final Module module;
     private final String title;
+    private double favoriteSize;
 
     private double titleWidth;
 
@@ -50,11 +52,26 @@ public class WFlorenceModule extends WPressable implements FlorenceWidget {
     @Override
     protected void onCalculateSize() {
         double pad = pad();
+        favoriteSize = theme.textHeight();
 
         if (titleWidth == 0) titleWidth = theme.textWidth(title);
 
-        width = pad + titleWidth + pad;
+        width = pad + titleWidth + pad + favoriteSize + pad;
         height = pad + theme.textHeight() + pad;
+    }
+
+    @Override
+    public boolean onMouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
+        if (isFavoriteButton(click.x(), click.y())) {
+            pressed = false;
+            if (click.button() == GLFW_MOUSE_BUTTON_LEFT || click.button() == GLFW_MOUSE_BUTTON_RIGHT) {
+                module.favorite = !module.favorite;
+                if (mc.currentScreen instanceof ModulesScreen screen) screen.refreshFavorites();
+                return true;
+            }
+        }
+
+        return super.onMouseClicked(click, doubled);
     }
 
     @Override
@@ -135,7 +152,7 @@ public class WFlorenceModule extends WPressable implements FlorenceWidget {
             x += w / 2 - titleWidth / 2;
         }
         else if (theme.moduleAlignment.get() == AlignmentX.Right) {
-            x += w - titleWidth;
+            x += w - titleWidth - favoriteSize - pad;
         }
 
         // Text color with active state
@@ -150,5 +167,27 @@ public class WFlorenceModule extends WPressable implements FlorenceWidget {
         }
         
         renderer.text(title, x, y + pad, textColor, false);
+
+        double favoriteX = favoriteX();
+        double favoriteY = y + pad;
+        Color favoriteColor = module.favorite ? theme.favoriteColor.get() : theme.textSecondaryColor.get();
+        renderer.quad(
+            favoriteX,
+            favoriteY,
+            favoriteSize,
+            favoriteSize,
+            module.favorite ? GuiRenderer.FAVORITE_YES : GuiRenderer.FAVORITE_NO,
+            favoriteColor
+        );
+    }
+
+    private double favoriteX() {
+        return x + width - pad() - favoriteSize;
+    }
+
+    private boolean isFavoriteButton(double mouseX, double mouseY) {
+        double favoriteX = favoriteX();
+        double favoriteY = y + pad();
+        return mouseX >= favoriteX && mouseX <= favoriteX + favoriteSize && mouseY >= favoriteY && mouseY <= favoriteY + favoriteSize;
     }
 }

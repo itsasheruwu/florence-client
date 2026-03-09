@@ -129,20 +129,20 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     // Colors
 
-    public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", new SettingColor(100, 150, 255));
-    public final Setting<SettingColor> accentSecondaryColor = color("accent-secondary", "Secondary accent color for gradients.", new SettingColor(150, 100, 255));
-    public final Setting<SettingColor> checkboxColor = color("checkbox", "Color of checkbox.", new SettingColor(100, 150, 255));
-    public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", new SettingColor(50, 255, 150));
-    public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", new SettingColor(255, 100, 100));
-    public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", new SettingColor(255, 215, 0));
+    public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", new SettingColor(168, 85, 247));
+    public final Setting<SettingColor> accentSecondaryColor = color("accent-secondary", "Secondary accent color for gradients.", new SettingColor(126, 34, 206));
+    public final Setting<SettingColor> checkboxColor = color("checkbox", "Color of checkbox.", new SettingColor(192, 132, 252));
+    public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", new SettingColor(196, 181, 253));
+    public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", new SettingColor(147, 51, 234));
+    public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", new SettingColor(216, 180, 254));
 
     // Text
 
     public final Setting<SettingColor> textColor = color(sgTextColors, "text", "Color of text.", new SettingColor(255, 255, 255));
     public final Setting<SettingColor> textSecondaryColor = color(sgTextColors, "text-secondary-text", "Color of secondary text.", new SettingColor(150, 150, 150));
-    public final Setting<SettingColor> textHighlightColor = color(sgTextColors, "text-highlight", "Color of text highlighting.", new SettingColor(45, 125, 245, 100));
+    public final Setting<SettingColor> textHighlightColor = color(sgTextColors, "text-highlight", "Color of text highlighting.", new SettingColor(168, 85, 247, 110));
     public final Setting<SettingColor> titleTextColor = color(sgTextColors, "title-text", "Color of title text.", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> loggedInColor = color(sgTextColors, "logged-in-text", "Color of logged in account name.", new SettingColor(45, 225, 45));
+    public final Setting<SettingColor> loggedInColor = color(sgTextColors, "logged-in-text", "Color of logged in account name.", new SettingColor(196, 181, 253));
     public final Setting<SettingColor> placeholderColor = color(sgTextColors, "placeholder", "Color of placeholder text.", new SettingColor(255, 255, 255, 20));
 
     // Background
@@ -150,38 +150,38 @@ public class FlorenceGuiTheme extends GuiTheme {
     public final ThreeStateColorSetting backgroundColor = new ThreeStateColorSetting(
             sgBackgroundColors,
             "background",
-            new SettingColor(15, 15, 20, 240),
-            new SettingColor(25, 25, 35, 240),
-            new SettingColor(35, 35, 50, 240)
+            new SettingColor(30, 18, 48, 240),
+            new SettingColor(52, 28, 76, 240),
+            new SettingColor(74, 40, 108, 240)
     );
 
-    public final Setting<SettingColor> moduleBackground = color(sgBackgroundColors, "module-background", "Color of module background when active.", new SettingColor(40, 50, 70, 200));
-    public final Setting<SettingColor> glassEffectColor = color(sgBackgroundColors, "glass-effect", "Color for glassmorphism effect.", new SettingColor(255, 255, 255, 10));
+    public final Setting<SettingColor> moduleBackground = color(sgBackgroundColors, "module-background", "Color of module background when active.", new SettingColor(90, 48, 130, 210));
+    public final Setting<SettingColor> glassEffectColor = color(sgBackgroundColors, "glass-effect", "Color for glassmorphism effect.", new SettingColor(232, 213, 255, 18));
 
     // Outline
 
     public final ThreeStateColorSetting outlineColor = new ThreeStateColorSetting(
             sgOutline,
             "outline",
-            new SettingColor(50, 70, 100, 150),
-            new SettingColor(80, 110, 150, 200),
-            new SettingColor(100, 140, 200, 255)
+            new SettingColor(122, 66, 186, 170),
+            new SettingColor(147, 88, 214, 210),
+            new SettingColor(192, 132, 252, 255)
     );
 
     // Separator
 
     public final Setting<SettingColor> separatorText = color(sgSeparator, "separator-text", "Color of separator text", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> separatorCenter = color(sgSeparator, "separator-center", "Center color of separators.", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> separatorEdges = color(sgSeparator, "separator-edges", "Color of separator edges.", new SettingColor(225, 225, 225, 150));
+    public final Setting<SettingColor> separatorCenter = color(sgSeparator, "separator-center", "Center color of separators.", new SettingColor(221, 214, 254));
+    public final Setting<SettingColor> separatorEdges = color(sgSeparator, "separator-edges", "Color of separator edges.", new SettingColor(192, 132, 252, 150));
 
     // Scrollbar
 
     public final ThreeStateColorSetting scrollbarColor = new ThreeStateColorSetting(
             sgScrollbar,
             "Scrollbar",
-            new SettingColor(30, 30, 30, 200),
-            new SettingColor(40, 40, 40, 200),
-            new SettingColor(50, 50, 50, 200)
+            new SettingColor(54, 31, 78, 210),
+            new SettingColor(75, 43, 108, 220),
+            new SettingColor(98, 57, 140, 230)
     );
 
     // Slider
@@ -194,8 +194,8 @@ public class FlorenceGuiTheme extends GuiTheme {
             new SettingColor(150, 60, 255)
     );
 
-    public final Setting<SettingColor> sliderLeft = color(sgSlider, "slider-left", "Color of slider left part.", new SettingColor(100,35,170));
-    public final Setting<SettingColor> sliderRight = color(sgSlider, "slider-right", "Color of slider right part.", new SettingColor(50, 50, 50));
+    public final Setting<SettingColor> sliderLeft = color(sgSlider, "slider-left", "Color of slider left part.", new SettingColor(126, 34, 206));
+    public final Setting<SettingColor> sliderRight = color(sgSlider, "slider-right", "Color of slider right part.", new SettingColor(61, 35, 92));
 
     // Starscript
 

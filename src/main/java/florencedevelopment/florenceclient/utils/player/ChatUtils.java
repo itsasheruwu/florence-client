@@ -38,7 +38,7 @@ public class ChatUtils {
         PREFIX = Text.empty()
             .setStyle(Style.EMPTY.withFormatting(Formatting.GRAY))
             .append("[")
-            .append(Text.literal("Meteor").setStyle(Style.EMPTY.withColor(TextColor.fromRgb(FlorenceClient.ADDON.color.getPacked()))))
+            .append(Text.literal("Florence").setStyle(Style.EMPTY.withColor(TextColor.fromRgb(FlorenceClient.ADDON.color.getPacked()))))
             .append("] ");
     }
 
