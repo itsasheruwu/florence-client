@@ -36,7 +36,7 @@ public class Strafe extends SpeedMode {
             case 1: //Jump
                 if (!moving || !mc.player.isOnGround()) break;
 
-                ((IVec3d) event.movement).florence$setY(getHop(0.40123128));
+                ((IVec3d) event.movement).florence$setY(getHop(0.40123128) * (settings.strafeLowHop.get() / 100.0));
                 speed *= settings.ncpSpeed.get();
                 stage++;
                 break;

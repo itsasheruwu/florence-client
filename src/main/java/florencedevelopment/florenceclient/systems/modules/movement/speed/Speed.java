@@ -53,6 +53,16 @@ public class Speed extends Module {
         .build()
     );
 
+    public final Setting<Integer> strafeLowHop = sgGeneral.add(new IntSetting.Builder()
+        .name("lowhop")
+        .description("Scales strafe jump height from 10% to 100% of the normal hop.")
+        .visible(() -> speedMode.get() == SpeedModes.Strafe)
+        .defaultValue(100)
+        .range(10, 100)
+        .sliderRange(10, 100)
+        .build()
+    );
+
     public final Setting<Boolean> ncpSpeedLimit = sgGeneral.add(new BoolSetting.Builder()
         .name("speed-limit")
         .description("Limits your speed on servers with very strict anticheats.")
