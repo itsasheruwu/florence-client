@@ -29,11 +29,13 @@ import florencedevelopment.florenceclient.renderer.text.TextRenderer;
 import florencedevelopment.florenceclient.settings.*;
 import florencedevelopment.florenceclient.systems.accounts.Account;
 import florencedevelopment.florenceclient.systems.modules.Module;
+import florencedevelopment.florenceclient.utils.misc.Keybind;
 import florencedevelopment.florenceclient.utils.render.color.Color;
 import florencedevelopment.florenceclient.utils.render.color.SettingColor;
 import net.minecraft.client.util.MacWindowUtil;
 
 import static florencedevelopment.florenceclient.FlorenceClient.mc;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT;
 
 public class FlorenceGuiTheme extends GuiTheme {
     private static final String ENDERSTORM_ACCOUNT = "Enderstorm08";
@@ -136,6 +138,43 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
+    public final Setting<Integer> gridSize = sgGeneral.add(new IntSetting.Builder()
+        .name("grid-size")
+        .description("Spacing between click GUI grid lines.")
+        .defaultValue(16)
+        .range(8, 64)
+        .sliderRange(8, 64)
+        .visible(snapToGrid::get)
+        .build()
+    );
+
+    public final Setting<Double> gridSnapSmoothness = sgGeneral.add(new DoubleSetting.Builder()
+        .name("grid-snap-smoothness")
+        .description("How strongly windows are pulled toward nearby grid points while dragging.")
+        .defaultValue(0.35)
+        .range(0.1, 1.0)
+        .sliderRange(0.1, 1.0)
+        .visible(snapToGrid::get)
+        .build()
+    );
+
+    public final Setting<Keybind> resizeWindowKeybind = sgGeneral.add(new KeybindSetting.Builder()
+        .name("resize-window-key")
+        .description("Hold this key to resize click GUI windows by dragging their borders.")
+        .defaultValue(Keybind.fromKey(GLFW_KEY_LEFT_ALT))
+        .build()
+    );
+
+    public final Setting<Integer> gridOpacity = sgGeneral.add(new IntSetting.Builder()
+        .name("grid-opacity")
+        .description("Opacity of the click GUI snap grid.")
+        .defaultValue(24)
+        .range(0, 255)
+        .sliderRange(0, 255)
+        .visible(snapToGrid::get)
+        .build()
+    );
+
     // Colors
 
     public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", accountColor(new SettingColor(100, 150, 255), new SettingColor(168, 85, 247)));
@@ -144,6 +183,13 @@ public class FlorenceGuiTheme extends GuiTheme {
     public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", accountColor(new SettingColor(50, 255, 150), new SettingColor(196, 181, 253)));
     public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", accountColor(new SettingColor(255, 100, 100), new SettingColor(147, 51, 234)));
     public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", accountColor(new SettingColor(255, 215, 0), new SettingColor(216, 180, 254)));
+    public final Setting<SettingColor> gridColor = sgColors.add(new ColorSetting.Builder()
+        .name("grid-color")
+        .description("Color of the click GUI snap grid.")
+        .defaultValue(accountColor(new SettingColor(120, 150, 200), new SettingColor(168, 85, 247)))
+        .visible(snapToGrid::get)
+        .build()
+    );
 
     // Text
 
@@ -472,6 +518,26 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     public boolean snapToGrid() {
         return snapToGrid.get();
+    }
+
+    public double gridSizePixels() {
+        return Math.max(8, Math.round(scale(gridSize.get())));
+    }
+
+    public double gridSnapSmoothness() {
+        return gridSnapSmoothness.get();
+    }
+
+    public int gridOpacity() {
+        return gridOpacity.get();
+    }
+
+    public SettingColor gridColor() {
+        return gridColor.get();
+    }
+
+    public Keybind resizeWindowKeybind() {
+        return resizeWindowKeybind.get();
     }
 
     public SettingColor accentSecondaryColor() {

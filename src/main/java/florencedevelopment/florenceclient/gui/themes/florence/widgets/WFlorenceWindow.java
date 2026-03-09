@@ -145,8 +145,7 @@ public class WFlorenceWindow extends WWindow implements FlorenceWidget {
                     return true;
                 }
 
-                dragging = true;
-                dragged = false;
+                WFlorenceWindow.this.startDragging();
                 return true;
             }
 
@@ -156,7 +155,7 @@ public class WFlorenceWindow extends WWindow implements FlorenceWidget {
         @Override
         public boolean onMouseReleased(net.minecraft.client.gui.Click click) {
             if (dragging) {
-                dragging = false;
+                WFlorenceWindow.this.finishDragging();
                 // Left click release only ends dragging. Expand/collapse is right-click in header.
             }
             return false;

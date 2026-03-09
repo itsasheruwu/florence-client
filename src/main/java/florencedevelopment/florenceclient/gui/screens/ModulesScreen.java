@@ -6,6 +6,7 @@
 package florencedevelopment.florenceclient.gui.screens;
 
 import florencedevelopment.florenceclient.gui.GuiTheme;
+import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.tabs.TabScreen;
 import florencedevelopment.florenceclient.gui.tabs.Tabs;
 import florencedevelopment.florenceclient.gui.utils.Cell;
@@ -21,6 +22,9 @@ import florencedevelopment.florenceclient.systems.modules.Category;
 import florencedevelopment.florenceclient.systems.modules.Module;
 import florencedevelopment.florenceclient.systems.modules.Modules;
 import florencedevelopment.florenceclient.utils.misc.NbtUtils;
+import florencedevelopment.florenceclient.renderer.Renderer2D;
+import florencedevelopment.florenceclient.utils.render.color.Color;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.item.Items;
 import net.minecraft.util.Pair;
 
@@ -50,6 +54,49 @@ public class ModulesScreen extends TabScreen {
     protected void init() {
         super.init();
         controller.refresh();
+    }
+
+    @Override
+    protected void onRenderBefore(DrawContext drawContext, float delta) {
+        if (!(theme instanceof FlorenceGuiTheme florenceTheme) || controller == null || !florenceTheme.snapToGrid()) return;
+
+        double gridSize = florenceTheme.gridSizePixels();
+        double windowWidth = getWindowWidth();
+        double windowHeight = getWindowHeight();
+        int baseOpacity = florenceTheme.gridOpacity();
+
+        Color gridColor = new Color(florenceTheme.gridColor());
+        gridColor.a = baseOpacity;
+
+        Color highlightColor = new Color(florenceTheme.gridColor());
+        highlightColor.a = Math.min(255, (int) Math.round(baseOpacity * 2.5));
+
+        Color intersectionColor = new Color(florenceTheme.gridColor());
+        intersectionColor.a = Math.min(255, (int) Math.round(baseOpacity * 3.5));
+
+        Renderer2D renderer = Renderer2D.COLOR;
+        renderer.begin();
+
+        for (double x = 0; x <= windowWidth; x += gridSize) {
+            renderer.quad(x, 0, 1, windowHeight, gridColor);
+        }
+
+        for (double y = 0; y <= windowHeight; y += gridSize) {
+            renderer.quad(0, y, windowWidth, 1, gridColor);
+        }
+
+        WWindow snapWindow = controller.getSnapPreviewWindow();
+        if (snapWindow != null) {
+            double snapX = snapWindow.getSnapPreviewX();
+            double snapY = snapWindow.getSnapPreviewY();
+            double markerSize = Math.max(6, Math.round(gridSize * 0.35));
+
+            renderer.quad(snapX, 0, 1, windowHeight, highlightColor);
+            renderer.quad(0, snapY, windowWidth, 1, highlightColor);
+            renderer.quad(snapX - markerSize / 2, snapY - markerSize / 2, markerSize, markerSize, intersectionColor);
+        }
+
+        renderer.render();
     }
 
     // Category
@@ -386,6 +433,14 @@ public class ModulesScreen extends TabScreen {
             WWindow window = (WWindow) topCell.widget();
             windows.remove(window);
             windows.add(window);
+        }
+
+        public WWindow getSnapPreviewWindow() {
+            if (activeWindow != null && activeWindow.isDraggingWindow() && activeWindow.hasSnapPreview()) {
+                return activeWindow;
+            }
+
+            return null;
         }
     }
 }
