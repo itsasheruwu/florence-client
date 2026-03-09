@@ -36,6 +36,8 @@ import net.minecraft.client.util.MacWindowUtil;
 import static florencedevelopment.florenceclient.FlorenceClient.mc;
 
 public class FlorenceGuiTheme extends GuiTheme {
+    private static final String ENDERSTORM_ACCOUNT = "Enderstorm08";
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgColors = settings.createGroup("Colors");
     private final SettingGroup sgTextColors = settings.createGroup("Text");
@@ -129,20 +131,20 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     // Colors
 
-    public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", new SettingColor(168, 85, 247));
-    public final Setting<SettingColor> accentSecondaryColor = color("accent-secondary", "Secondary accent color for gradients.", new SettingColor(126, 34, 206));
-    public final Setting<SettingColor> checkboxColor = color("checkbox", "Color of checkbox.", new SettingColor(192, 132, 252));
-    public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", new SettingColor(196, 181, 253));
-    public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", new SettingColor(147, 51, 234));
-    public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", new SettingColor(216, 180, 254));
+    public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", accountColor(new SettingColor(100, 150, 255), new SettingColor(168, 85, 247)));
+    public final Setting<SettingColor> accentSecondaryColor = color("accent-secondary", "Secondary accent color for gradients.", accountColor(new SettingColor(150, 100, 255), new SettingColor(126, 34, 206)));
+    public final Setting<SettingColor> checkboxColor = color("checkbox", "Color of checkbox.", accountColor(new SettingColor(100, 150, 255), new SettingColor(192, 132, 252)));
+    public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", accountColor(new SettingColor(50, 255, 150), new SettingColor(196, 181, 253)));
+    public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", accountColor(new SettingColor(255, 100, 100), new SettingColor(147, 51, 234)));
+    public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", accountColor(new SettingColor(255, 215, 0), new SettingColor(216, 180, 254)));
 
     // Text
 
     public final Setting<SettingColor> textColor = color(sgTextColors, "text", "Color of text.", new SettingColor(255, 255, 255));
     public final Setting<SettingColor> textSecondaryColor = color(sgTextColors, "text-secondary-text", "Color of secondary text.", new SettingColor(150, 150, 150));
-    public final Setting<SettingColor> textHighlightColor = color(sgTextColors, "text-highlight", "Color of text highlighting.", new SettingColor(168, 85, 247, 110));
+    public final Setting<SettingColor> textHighlightColor = color(sgTextColors, "text-highlight", "Color of text highlighting.", accountColor(new SettingColor(45, 125, 245, 100), new SettingColor(168, 85, 247, 110)));
     public final Setting<SettingColor> titleTextColor = color(sgTextColors, "title-text", "Color of title text.", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> loggedInColor = color(sgTextColors, "logged-in-text", "Color of logged in account name.", new SettingColor(196, 181, 253));
+    public final Setting<SettingColor> loggedInColor = color(sgTextColors, "logged-in-text", "Color of logged in account name.", accountColor(new SettingColor(45, 225, 45), new SettingColor(196, 181, 253)));
     public final Setting<SettingColor> placeholderColor = color(sgTextColors, "placeholder", "Color of placeholder text.", new SettingColor(255, 255, 255, 20));
 
     // Background
@@ -150,38 +152,38 @@ public class FlorenceGuiTheme extends GuiTheme {
     public final ThreeStateColorSetting backgroundColor = new ThreeStateColorSetting(
             sgBackgroundColors,
             "background",
-            new SettingColor(30, 18, 48, 240),
-            new SettingColor(52, 28, 76, 240),
-            new SettingColor(74, 40, 108, 240)
+            accountColor(new SettingColor(15, 15, 20, 240), new SettingColor(30, 18, 48, 240)),
+            accountColor(new SettingColor(25, 25, 35, 240), new SettingColor(52, 28, 76, 240)),
+            accountColor(new SettingColor(35, 35, 50, 240), new SettingColor(74, 40, 108, 240))
     );
 
-    public final Setting<SettingColor> moduleBackground = color(sgBackgroundColors, "module-background", "Color of module background when active.", new SettingColor(90, 48, 130, 210));
-    public final Setting<SettingColor> glassEffectColor = color(sgBackgroundColors, "glass-effect", "Color for glassmorphism effect.", new SettingColor(232, 213, 255, 18));
+    public final Setting<SettingColor> moduleBackground = color(sgBackgroundColors, "module-background", "Color of module background when active.", accountColor(new SettingColor(40, 50, 70, 200), new SettingColor(90, 48, 130, 210)));
+    public final Setting<SettingColor> glassEffectColor = color(sgBackgroundColors, "glass-effect", "Color for glassmorphism effect.", accountColor(new SettingColor(255, 255, 255, 10), new SettingColor(232, 213, 255, 18)));
 
     // Outline
 
     public final ThreeStateColorSetting outlineColor = new ThreeStateColorSetting(
             sgOutline,
             "outline",
-            new SettingColor(122, 66, 186, 170),
-            new SettingColor(147, 88, 214, 210),
-            new SettingColor(192, 132, 252, 255)
+            accountColor(new SettingColor(50, 70, 100, 150), new SettingColor(122, 66, 186, 170)),
+            accountColor(new SettingColor(80, 110, 150, 200), new SettingColor(147, 88, 214, 210)),
+            accountColor(new SettingColor(100, 140, 200, 255), new SettingColor(192, 132, 252, 255))
     );
 
     // Separator
 
     public final Setting<SettingColor> separatorText = color(sgSeparator, "separator-text", "Color of separator text", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> separatorCenter = color(sgSeparator, "separator-center", "Center color of separators.", new SettingColor(221, 214, 254));
-    public final Setting<SettingColor> separatorEdges = color(sgSeparator, "separator-edges", "Color of separator edges.", new SettingColor(192, 132, 252, 150));
+    public final Setting<SettingColor> separatorCenter = color(sgSeparator, "separator-center", "Center color of separators.", accountColor(new SettingColor(255, 255, 255), new SettingColor(221, 214, 254)));
+    public final Setting<SettingColor> separatorEdges = color(sgSeparator, "separator-edges", "Color of separator edges.", accountColor(new SettingColor(225, 225, 225, 150), new SettingColor(192, 132, 252, 150)));
 
     // Scrollbar
 
     public final ThreeStateColorSetting scrollbarColor = new ThreeStateColorSetting(
             sgScrollbar,
             "Scrollbar",
-            new SettingColor(54, 31, 78, 210),
-            new SettingColor(75, 43, 108, 220),
-            new SettingColor(98, 57, 140, 230)
+            accountColor(new SettingColor(30, 30, 30, 200), new SettingColor(54, 31, 78, 210)),
+            accountColor(new SettingColor(40, 40, 40, 200), new SettingColor(75, 43, 108, 220)),
+            accountColor(new SettingColor(50, 50, 50, 200), new SettingColor(98, 57, 140, 230))
     );
 
     // Slider
@@ -194,8 +196,8 @@ public class FlorenceGuiTheme extends GuiTheme {
             new SettingColor(150, 60, 255)
     );
 
-    public final Setting<SettingColor> sliderLeft = color(sgSlider, "slider-left", "Color of slider left part.", new SettingColor(126, 34, 206));
-    public final Setting<SettingColor> sliderRight = color(sgSlider, "slider-right", "Color of slider right part.", new SettingColor(61, 35, 92));
+    public final Setting<SettingColor> sliderLeft = color(sgSlider, "slider-left", "Color of slider left part.", accountColor(new SettingColor(100, 35, 170), new SettingColor(126, 34, 206)));
+    public final Setting<SettingColor> sliderRight = color(sgSlider, "slider-right", "Color of slider right part.", accountColor(new SettingColor(50, 50, 50), new SettingColor(61, 35, 92)));
 
     // Starscript
 
@@ -225,6 +227,16 @@ public class FlorenceGuiTheme extends GuiTheme {
     }
     private Setting<SettingColor> color(String name, String description, SettingColor color) {
         return color(sgColors, name, description, color);
+    }
+
+    private static SettingColor accountColor(SettingColor defaultColor, SettingColor enderstormColor) {
+        return isEnderstormAccount() ? enderstormColor : defaultColor;
+    }
+
+    private static boolean isEnderstormAccount() {
+        return mc != null
+            && mc.getSession() != null
+            && ENDERSTORM_ACCOUNT.equals(mc.getSession().getUsername());
     }
 
     // Widgets
