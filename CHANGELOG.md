@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.21.11-3] - 2026-03-10
+
+Interface and movement update focused on the Florence click GUI, combat helpers, and strafe tuning.
+
+### Added
+
+- New `Unbind` command for clearing module and action keybinds from chat.
+- New `Mace Assist` combat module to help manage mace-specific attack behavior.
+- New `Player Head Finder` world module for locating player heads more easily.
+- New `temp-flight` option for Speed strafe damage boost to reuse the current Flight mode while knockback boost is active.
+- New low-hop slider for Speed strafe to fine-tune jump height.
+- New click GUI grid controls, resizable windows, and active module animation controls.
+
+### Changed
+
+- Refined the Florence theme with account-specific defaults and broader click GUI layout polish.
+- Normalized active modules animation speed scaling for more consistent HUD motion.
+
+### Fixed
+
+- Fixed click GUI window handling issues affecting interaction and resizing.
+- Fixed a null-safety issue in Jesus tick handling.
+
+### Notes
+
+- Release artifact version is `1.21.11-3`.
+- Release artifact name is `florence-client-1.21.11-3.jar`.
+
 ## [v1.21.11-2] - 2026-03-08
 
 Combat and movement update focused on target circling, strafe tuning, and smarter ranged KillAura behavior.
