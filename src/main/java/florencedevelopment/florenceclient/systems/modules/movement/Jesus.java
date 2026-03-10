@@ -177,6 +177,8 @@ public class Jesus extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
+        if (mc.player == null || mc.world == null) return;
+
         boolean bubbleColumn = isInBubbleColumn;
         isInBubbleColumn = false;
 

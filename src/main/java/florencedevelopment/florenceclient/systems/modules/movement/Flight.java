@@ -152,6 +152,14 @@ public class Flight extends Module {
 
         if (mc.player.getYaw() != lastYaw) mc.player.setYaw(lastYaw);
 
+        if (isActive()) applyFlightTick();
+    }
+
+    /**
+     * Applies one tick of flight movement using the current Flight mode and settings.
+     * Used by this module when active, and by Speed's temp flight when damage boost is on.
+     */
+    public void applyFlightTick() {
         switch (mode.get()) {
             case Velocity -> {
                 mc.player.getAbilities().flying = false;
@@ -174,6 +182,11 @@ public class Flight extends Module {
                 mc.player.getAbilities().allowFlying = true;
             }
         }
+    }
+
+    /** Clears flight abilities (flying, allowFlying, fly speed). Call when temp flight ends and Flight module is not active. */
+    public void clearFlightAbilities() {
+        abilitiesOff();
     }
 
     private void antiKickPacket(PlayerMoveC2SPacket packet, double currentY) {
@@ -243,7 +256,7 @@ public class Flight extends Module {
         } else return lastY - currentY < 0.03130D;
     }
 
-    private void abilitiesOff() {
+    public void abilitiesOff() {
         mc.player.getAbilities().flying = false;
         mc.player.getAbilities().setFlySpeed(0.05f);
         if (mc.player.getAbilities().creativeMode) return;

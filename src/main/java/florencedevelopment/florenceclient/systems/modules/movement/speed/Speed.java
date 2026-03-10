@@ -12,6 +12,7 @@ import florencedevelopment.florenceclient.settings.*;
 import florencedevelopment.florenceclient.systems.modules.Categories;
 import florencedevelopment.florenceclient.systems.modules.Module;
 import florencedevelopment.florenceclient.systems.modules.Modules;
+import florencedevelopment.florenceclient.systems.modules.movement.Flight;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.modes.Strafe;
 import florencedevelopment.florenceclient.systems.modules.movement.speed.modes.Vanilla;
 import florencedevelopment.florenceclient.systems.modules.world.Timer;
@@ -90,6 +91,14 @@ public class Speed extends Module {
         .build()
     );
 
+    public final Setting<Boolean> strafeTempFlight = sgGeneral.add(new BoolSetting.Builder()
+        .name("temp-flight")
+        .description("While taking knockback (damage boost active), apply the same fly as the Flight module's current mode.")
+        .visible(() -> speedMode.get() == SpeedModes.Strafe && strafeDamageBoost.get())
+        .defaultValue(false)
+        .build()
+    );
+
     public final Setting<Double> timer = sgGeneral.add(new DoubleSetting.Builder()
         .name("timer")
         .description("Timer override.")
@@ -123,6 +132,7 @@ public class Speed extends Module {
     );
 
     private SpeedMode currentMode;
+    private boolean wasTempFlightLastTick;
 
     public Speed() {
         super(Categories.Movement, "speed", "Modifies your movement speed when moving on the ground.");
@@ -137,6 +147,10 @@ public class Speed extends Module {
 
     @Override
     public void onDeactivate() {
+        if (wasTempFlightLastTick && !Modules.get().get(Flight.class).isActive()) {
+            Modules.get().get(Flight.class).clearFlightAbilities();
+        }
+        wasTempFlightLastTick = false;
         Modules.get().get(Timer.class).setOverride(Timer.OFF);
         currentMode.onDeactivate();
     }
@@ -161,6 +175,24 @@ public class Speed extends Module {
         if (stopSpeed()) return;
 
         currentMode.onTick();
+    }
+
+    @EventHandler
+    private void onPostTick(TickEvent.Post event) {
+        Flight flight = Modules.get().get(Flight.class);
+        boolean tempFlightActive = isActive() && speedMode.get() == SpeedModes.Strafe
+            && strafeDamageBoost.get() && strafeTempFlight.get()
+            && mc.player.hurtTime > 0 && !flight.isActive();
+
+        if (tempFlightActive) {
+            flight.applyFlightTick();
+            wasTempFlightLastTick = true;
+        } else if (wasTempFlightLastTick && !flight.isActive()) {
+            flight.clearFlightAbilities();
+            wasTempFlightLastTick = false;
+        } else if (!tempFlightActive) {
+            wasTempFlightLastTick = false;
+        }
     }
 
     @EventHandler
