@@ -6,7 +6,6 @@
 package florencedevelopment.florenceclient.mixin.lithium;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.llamalad7.mixinextras.sugar.Local;
 import florencedevelopment.florenceclient.FlorenceClient;
 import florencedevelopment.florenceclient.events.world.CollisionShapeEvent;
 import net.caffeinemc.mods.lithium.common.entity.movement.ChunkAwareBlockCollisionSweeper;
@@ -32,7 +31,8 @@ public abstract class ChunkAwareBlockCollisionSweeperMixin {
     private BlockPos.Mutable pos;
 
     @ModifyExpressionValue(method = "computeNext()Lnet/minecraft/util/shape/VoxelShape;", at = @At(value = "INVOKE", target = "Lnet/minecraft/block/ShapeContext;getCollisionShape(Lnet/minecraft/block/BlockState;Lnet/minecraft/world/CollisionView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/shape/VoxelShape;"))
-    private VoxelShape modifyCollisionShape(VoxelShape original, @Local BlockState state) {
+    private VoxelShape modifyCollisionShape(VoxelShape original) {
+        BlockState state = world.getBlockState(pos);
         if (world != MinecraftClient.getInstance().world) return original;
 
         CollisionShapeEvent event = FlorenceClient.EVENT_BUS.post(CollisionShapeEvent.get(state, pos, original));
