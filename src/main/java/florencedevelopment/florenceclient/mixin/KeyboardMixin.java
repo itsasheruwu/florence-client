@@ -10,6 +10,7 @@ import florencedevelopment.florenceclient.events.florence.CharTypedEvent;
 import florencedevelopment.florenceclient.events.florence.KeyEvent;
 import florencedevelopment.florenceclient.gui.GuiKeyEvents;
 import florencedevelopment.florenceclient.gui.WidgetScreen;
+import florencedevelopment.florenceclient.systems.hud.Hud;
 import florencedevelopment.florenceclient.utils.Utils;
 import florencedevelopment.florenceclient.utils.misc.input.Input;
 import florencedevelopment.florenceclient.utils.misc.input.KeyAction;
@@ -50,6 +51,15 @@ public abstract class KeyboardMixin {
                 if (FlorenceClient.EVENT_BUS.post(KeyEvent.get(new KeyInput(input.key(), input.scancode(), modifiers), KeyAction.get(action))).isCancelled()) ci.cancel();
             }
         }
+    }
+
+    @Inject(method = "onKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/ScreenshotRecorder;saveScreenshot(Ljava/io/File;Lnet/minecraft/client/gl/Framebuffer;Ljava/util/function/Consumer;)V"), cancellable = true)
+    private void onScreenshotKey(long window, int action, KeyInput input, CallbackInfo ci) {
+        Hud hud = Hud.get();
+        if (hud == null || !hud.shouldHideActiveModulesInScreenshots() || client.world == null) return;
+
+        hud.requestDelayedScreenshotCapture();
+        ci.cancel();
     }
 
     @Inject(method = "onChar", at = @At("HEAD"), cancellable = true)

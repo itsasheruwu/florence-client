@@ -255,6 +255,8 @@ public class ActiveModulesHud extends HudElement {
 
     @Override
     public void render(HudRenderer renderer) {
+        if (!isInEditor() && Hud.get().isHidingForScreenshot()) return;
+
         double x = this.x;
         double y = this.y;
 

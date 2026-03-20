@@ -21,6 +21,7 @@ import florencedevelopment.florenceclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
+import net.minecraft.client.util.ScreenshotRecorder;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -56,6 +57,13 @@ public class Hud extends System<Hud> implements Iterable<HudElement> {
         .name("hide-in-menus")
         .description("Hides the meteor hud when in inventory screens or game menus.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> hideInScreenshots = sgGeneral.add(new BoolSetting.Builder()
+        .name("hide-in-screenshots")
+        .description("Hides the active modules list in screenshots.")
+        .defaultValue(true)
         .build()
     );
 
@@ -103,6 +111,8 @@ public class Hud extends System<Hud> implements Iterable<HudElement> {
     );
 
     private boolean resetToDefaultElements;
+    private boolean hideForScreenshot;
+    private boolean delayedScreenshotPending;
 
     public Hud() {
         super("hud");
@@ -228,20 +238,28 @@ public class Hud extends System<Hud> implements Iterable<HudElement> {
     private void onRender(Render2DEvent event) {
         if (Utils.isLoading()) return;
 
-        if (!active || shouldHideHud()) return;
-        if ((mc.options.hudHidden || mc.debugHudEntryList.isF3Enabled()) && !HudEditorScreen.isOpen()) return;
+        if (active && !shouldHideHud() && ((!(mc.options.hudHidden || mc.debugHudEntryList.isF3Enabled())) || HudEditorScreen.isOpen())) {
+            HudRenderer.INSTANCE.begin(event.drawContext);
 
-        HudRenderer.INSTANCE.begin(event.drawContext);
+            for (HudElement element : elements) {
+                element.updatePos();
 
-        for (HudElement element : elements) {
-            element.updatePos();
-
-            if (element.isActive() || element.isInEditor()) {
-                element.render(HudRenderer.INSTANCE);
+                if (element.isActive() || element.isInEditor()) {
+                    element.render(HudRenderer.INSTANCE);
+                }
             }
+
+            HudRenderer.INSTANCE.end();
         }
 
-        HudRenderer.INSTANCE.end();
+        if (delayedScreenshotPending) {
+            delayedScreenshotPending = false;
+            try {
+                ScreenshotRecorder.saveScreenshot(mc.runDirectory, mc.getFramebuffer(), text -> mc.inGameHud.getChatHud().addMessage(text));
+            } finally {
+                hideForScreenshot = false;
+            }
+        }
     }
 
     private boolean shouldHideHud() {
@@ -261,6 +279,19 @@ public class Hud extends System<Hud> implements Iterable<HudElement> {
 
     public double getTextScale() {
         return textScale.get();
+    }
+
+    public boolean isHidingForScreenshot() {
+        return hideForScreenshot;
+    }
+
+    public void requestDelayedScreenshotCapture() {
+        hideForScreenshot = true;
+        delayedScreenshotPending = true;
+    }
+
+    public boolean shouldHideActiveModulesInScreenshots() {
+        return hideInScreenshots.get();
     }
 
     @NotNull
