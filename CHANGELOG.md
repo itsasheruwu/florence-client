@@ -2,9 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [v1.21.11-4] - 2026-10-08
 
-Click GUI redesign: new rendering, new theme, new widgets and a search for everything.
+Click GUI redesign update: a new renderer and theme, rebuilt widgets, a Legit tab, a command palette and notifications.
 
 ### Added
 
@@ -42,6 +42,9 @@ Click GUI redesign: new rendering, new theme, new widgets and a search for every
 
 ### Notes
 
+- Release artifact version is `1.21.11-4`.
+- Release artifact name is `florence-client-1.21.11-4.jar`.
+- Saved GUI theme settings under the old `Meteor` name are still read, the Blur `meteor` option was renamed to `florence` and resets once.
 - Developers can set `FLORENCE_DEV_OPEN_GUI` (and optionally `world`) in a development environment to open the click GUI by itself, see `DevAutoOpen`.
 
 ## [v1.21.11-3] - 2026-03-10
