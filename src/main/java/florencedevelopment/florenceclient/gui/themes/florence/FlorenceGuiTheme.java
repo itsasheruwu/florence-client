@@ -8,14 +8,15 @@ package florencedevelopment.florenceclient.gui.themes.florence;
 import florencedevelopment.florenceclient.gui.DefaultSettingsWidgetFactory;
 import florencedevelopment.florenceclient.gui.GuiTheme;
 import florencedevelopment.florenceclient.gui.WidgetScreen;
+import florencedevelopment.florenceclient.gui.animation.Motion;
+import florencedevelopment.florenceclient.gui.design.Design;
+import florencedevelopment.florenceclient.gui.design.Preset;
 import florencedevelopment.florenceclient.gui.renderer.packer.GuiTexture;
 import florencedevelopment.florenceclient.gui.themes.florence.widgets.*;
-import florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceExpandableModule;
 import florencedevelopment.florenceclient.gui.themes.florence.widgets.input.WFlorenceDropdown;
 import florencedevelopment.florenceclient.gui.themes.florence.widgets.input.WFlorenceSlider;
 import florencedevelopment.florenceclient.gui.themes.florence.widgets.input.WFlorenceTextBox;
 import florencedevelopment.florenceclient.gui.themes.florence.widgets.pressable.*;
-import florencedevelopment.florenceclient.gui.utils.AlignmentX;
 import florencedevelopment.florenceclient.gui.utils.CharFilter;
 import florencedevelopment.florenceclient.gui.widgets.*;
 import florencedevelopment.florenceclient.gui.widgets.containers.WSection;
@@ -25,6 +26,7 @@ import florencedevelopment.florenceclient.gui.widgets.input.WDropdown;
 import florencedevelopment.florenceclient.gui.widgets.input.WSlider;
 import florencedevelopment.florenceclient.gui.widgets.input.WTextBox;
 import florencedevelopment.florenceclient.gui.widgets.pressable.*;
+import florencedevelopment.florenceclient.renderer.BackdropBlur;
 import florencedevelopment.florenceclient.renderer.text.TextRenderer;
 import florencedevelopment.florenceclient.settings.*;
 import florencedevelopment.florenceclient.systems.accounts.Account;
@@ -38,16 +40,9 @@ import static florencedevelopment.florenceclient.FlorenceClient.mc;
 import static org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT;
 
 public class FlorenceGuiTheme extends GuiTheme {
-    private static final String ENDERSTORM_ACCOUNT = "Enderstorm08";
-
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-    private final SettingGroup sgColors = settings.createGroup("Colors");
-    private final SettingGroup sgTextColors = settings.createGroup("Text");
-    private final SettingGroup sgBackgroundColors = settings.createGroup("Background");
-    private final SettingGroup sgOutline = settings.createGroup("Outline");
-    private final SettingGroup sgSeparator = settings.createGroup("Separator");
-    private final SettingGroup sgScrollbar = settings.createGroup("Scrollbar");
-    private final SettingGroup sgSlider = settings.createGroup("Slider");
+    private final SettingGroup sgEffects = settings.createGroup("Effects");
+    private final SettingGroup sgWindows = settings.createGroup("Windows");
     private final SettingGroup sgStarscript = settings.createGroup("Starscript");
 
     // General
@@ -65,17 +60,79 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
-    public final Setting<AlignmentX> moduleAlignment = sgGeneral.add(new EnumSetting.Builder<AlignmentX>()
-        .name("module-alignment")
-        .description("How module titles are aligned.")
-        .defaultValue(AlignmentX.Center)
+    public final Setting<Preset> preset = sgGeneral.add(new EnumSetting.Builder<Preset>()
+        .name("preset")
+        .description("The base look of the GUI.")
+        .defaultValue(Preset.DARK)
+        .onChanged(v -> rebuildDesign())
+        .build()
+    );
+
+    public final Setting<SettingColor> accentColor = sgGeneral.add(new ColorSetting.Builder()
+        .name("accent")
+        .description("Main color of the GUI.")
+        .defaultValue(new SettingColor(108, 92, 231))
+        .onChanged(v -> rebuildDesign())
+        .build()
+    );
+
+    public final Setting<SettingColor> accentSecondaryColor = sgGeneral.add(new ColorSetting.Builder()
+        .name("accent-secondary")
+        .description("Second color of gradients.")
+        .defaultValue(new SettingColor(74, 144, 255))
+        .onChanged(v -> rebuildDesign())
+        .build()
+    );
+
+    public final Setting<Density> density = sgGeneral.add(new EnumSetting.Builder<Density>()
+        .name("density")
+        .description("How much room there is between things.")
+        .defaultValue(Density.Comfortable)
+        .onChanged(v -> {
+            if (mc.currentScreen instanceof WidgetScreen) ((WidgetScreen) mc.currentScreen).invalidate();
+        })
+        .build()
+    );
+
+    public final Setting<Double> categoryWidth = sgGeneral.add(new DoubleSetting.Builder()
+        .name("window-width")
+        .description("Width of the module windows.")
+        .defaultValue(300)
+        .range(180, 520)
+        .sliderRange(180, 520)
+        .decimalPlaces(0)
+        .onChanged(v -> {
+            if (mc.currentScreen instanceof florencedevelopment.florenceclient.gui.screens.ModulesScreen screen) screen.reload();
+        })
+        .build()
+    );
+
+    @Override
+    public double windowWidth() {
+        return categoryWidth.get();
+    }
+
+    public final Setting<Double> cornerRadius = sgGeneral.add(new DoubleSetting.Builder()
+        .name("corner-radius")
+        .description("How round the corners of windows are, the corners of buttons and fields follow.")
+        .defaultValue(10)
+        .min(0)
+        .max(24)
+        .sliderRange(0, 20)
         .build()
     );
 
     public final Setting<Boolean> categoryIcons = sgGeneral.add(new BoolSetting.Builder()
         .name("category-icons")
         .description("Adds item icons to module categories.")
-        .defaultValue(false)
+        .defaultValue(true)
+        .build()
+    );
+
+    public final Setting<Boolean> notifications = sgGeneral.add(new BoolSetting.Builder()
+        .name("notifications")
+        .description("Shows a small message when a module is turned on or off or bound to a key from the GUI.")
+        .defaultValue(true)
         .build()
     );
 
@@ -89,56 +146,70 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
-    public final Setting<Boolean> roundedCorners = sgGeneral.add(new BoolSetting.Builder()
-        .name("rounded-corners")
-        .description("Enable rounded corners for modern look.")
+    // Effects
+
+    public final Setting<Boolean> glass = sgEffects.add(new BoolSetting.Builder()
+        .name("glass")
+        .description("Shows the blurred world through windows.")
         .defaultValue(true)
         .build()
     );
 
-    public final Setting<Double> cornerRadius = sgGeneral.add(new DoubleSetting.Builder()
-        .name("corner-radius")
-        .description("Radius of rounded corners.")
-        .defaultValue(6)
-        .min(0)
-        .max(20)
-        .sliderRange(0, 20)
-        .visible(() -> roundedCorners.get())
+    public final Setting<Integer> blurStrength = sgEffects.add(new IntSetting.Builder()
+        .name("blur-strength")
+        .description("How blurred the world behind windows is.")
+        .defaultValue(8)
+        .range(1, BackdropBlur.MAX_LEVEL)
+        .sliderRange(1, BackdropBlur.MAX_LEVEL)
+        .visible(glass::get)
         .build()
     );
 
-    public final Setting<Boolean> enableShadows = sgGeneral.add(new BoolSetting.Builder()
-        .name("enable-shadows")
-        .description("Enable shadows for depth effect.")
+    public final Setting<Double> panelOpacity = sgEffects.add(new DoubleSetting.Builder()
+        .name("panel-opacity")
+        .description("How opaque windows are. Lower values show more of the world behind them.")
+        .defaultValue(0.78)
+        .range(0.3, 1)
+        .sliderRange(0.3, 1)
+        .onChanged(v -> rebuildDesign())
+        .build()
+    );
+
+    public final Setting<Boolean> shadows = sgEffects.add(new BoolSetting.Builder()
+        .name("shadows")
+        .description("Draws soft shadows below windows and menus.")
         .defaultValue(true)
         .build()
     );
 
-    public final Setting<Boolean> smoothAnimations = sgGeneral.add(new BoolSetting.Builder()
-        .name("smooth-animations")
-        .description("Enable smooth animations and transitions.")
-        .defaultValue(true)
+    public final Setting<Double> animationSpeed = sgEffects.add(new DoubleSetting.Builder()
+        .name("animation-speed")
+        .description("How fast animations play.")
+        .defaultValue(1)
+        .range(0.5, 2.5)
+        .sliderRange(0.5, 2.5)
+        .onChanged(v -> configureMotion())
         .build()
     );
 
-    public final Setting<Boolean> expandableModules = sgGeneral.add(new BoolSetting.Builder()
-        .name("expandable-modules")
-        .description("Use dropdown/expandable module style with inline settings.")
-        .defaultValue(true)
-        .onChanged(v -> {
-            if (mc.currentScreen instanceof WidgetScreen) ((WidgetScreen) mc.currentScreen).reload();
-        })
+    public final Setting<Boolean> reducedMotion = sgEffects.add(new BoolSetting.Builder()
+        .name("reduced-motion")
+        .description("Skips animations.")
+        .defaultValue(false)
+        .onChanged(v -> configureMotion())
         .build()
     );
 
-    public final Setting<Boolean> snapToGrid = sgGeneral.add(new BoolSetting.Builder()
+    // Windows
+
+    public final Setting<Boolean> snapToGrid = sgWindows.add(new BoolSetting.Builder()
         .name("snap-to-grid")
         .description("Snap click GUI windows to a grid while dragging.")
         .defaultValue(false)
         .build()
     );
 
-    public final Setting<Integer> gridSize = sgGeneral.add(new IntSetting.Builder()
+    public final Setting<Integer> gridSize = sgWindows.add(new IntSetting.Builder()
         .name("grid-size")
         .description("Spacing between click GUI grid lines.")
         .defaultValue(16)
@@ -148,7 +219,7 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
-    public final Setting<Double> gridSnapSmoothness = sgGeneral.add(new DoubleSetting.Builder()
+    public final Setting<Double> gridSnapSmoothness = sgWindows.add(new DoubleSetting.Builder()
         .name("grid-snap-smoothness")
         .description("How strongly windows are pulled toward nearby grid points while dragging.")
         .defaultValue(0.35)
@@ -158,14 +229,14 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
-    public final Setting<Keybind> resizeWindowKeybind = sgGeneral.add(new KeybindSetting.Builder()
+    public final Setting<Keybind> resizeWindowKeybind = sgWindows.add(new KeybindSetting.Builder()
         .name("resize-window-key")
         .description("Hold this key to resize click GUI windows by dragging their borders.")
         .defaultValue(Keybind.fromKey(GLFW_KEY_LEFT_ALT))
         .build()
     );
 
-    public final Setting<Integer> gridOpacity = sgGeneral.add(new IntSetting.Builder()
+    public final Setting<Integer> gridOpacity = sgWindows.add(new IntSetting.Builder()
         .name("grid-opacity")
         .description("Opacity of the click GUI snap grid.")
         .defaultValue(24)
@@ -175,82 +246,13 @@ public class FlorenceGuiTheme extends GuiTheme {
         .build()
     );
 
-    // Colors
-
-    public final Setting<SettingColor> accentColor = color("accent", "Main color of the GUI.", accountColor(new SettingColor(100, 150, 255), new SettingColor(168, 85, 247)));
-    public final Setting<SettingColor> accentSecondaryColor = color("accent-secondary", "Secondary accent color for gradients.", accountColor(new SettingColor(150, 100, 255), new SettingColor(126, 34, 206)));
-    public final Setting<SettingColor> checkboxColor = color("checkbox", "Color of checkbox.", accountColor(new SettingColor(100, 150, 255), new SettingColor(192, 132, 252)));
-    public final Setting<SettingColor> plusColor = color("plus", "Color of plus button.", accountColor(new SettingColor(50, 255, 150), new SettingColor(196, 181, 253)));
-    public final Setting<SettingColor> minusColor = color("minus", "Color of minus button.", accountColor(new SettingColor(255, 100, 100), new SettingColor(147, 51, 234)));
-    public final Setting<SettingColor> favoriteColor = color("favorite", "Color of checked favorite button.", accountColor(new SettingColor(255, 215, 0), new SettingColor(216, 180, 254)));
-    public final Setting<SettingColor> gridColor = sgColors.add(new ColorSetting.Builder()
+    public final Setting<SettingColor> gridColor = sgWindows.add(new ColorSetting.Builder()
         .name("grid-color")
         .description("Color of the click GUI snap grid.")
-        .defaultValue(accountColor(new SettingColor(120, 150, 200), new SettingColor(168, 85, 247)))
+        .defaultValue(new SettingColor(150, 160, 255))
         .visible(snapToGrid::get)
         .build()
     );
-
-    // Text
-
-    public final Setting<SettingColor> textColor = color(sgTextColors, "text", "Color of text.", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> textSecondaryColor = color(sgTextColors, "text-secondary-text", "Color of secondary text.", new SettingColor(150, 150, 150));
-    public final Setting<SettingColor> textHighlightColor = color(sgTextColors, "text-highlight", "Color of text highlighting.", accountColor(new SettingColor(45, 125, 245, 100), new SettingColor(168, 85, 247, 110)));
-    public final Setting<SettingColor> titleTextColor = color(sgTextColors, "title-text", "Color of title text.", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> loggedInColor = color(sgTextColors, "logged-in-text", "Color of logged in account name.", accountColor(new SettingColor(45, 225, 45), new SettingColor(196, 181, 253)));
-    public final Setting<SettingColor> placeholderColor = color(sgTextColors, "placeholder", "Color of placeholder text.", new SettingColor(255, 255, 255, 20));
-
-    // Background
-
-    public final ThreeStateColorSetting backgroundColor = new ThreeStateColorSetting(
-            sgBackgroundColors,
-            "background",
-            accountColor(new SettingColor(15, 15, 20, 240), new SettingColor(30, 18, 48, 240)),
-            accountColor(new SettingColor(25, 25, 35, 240), new SettingColor(52, 28, 76, 240)),
-            accountColor(new SettingColor(35, 35, 50, 240), new SettingColor(74, 40, 108, 240))
-    );
-
-    public final Setting<SettingColor> moduleBackground = color(sgBackgroundColors, "module-background", "Color of module background when active.", accountColor(new SettingColor(40, 50, 70, 200), new SettingColor(90, 48, 130, 210)));
-    public final Setting<SettingColor> glassEffectColor = color(sgBackgroundColors, "glass-effect", "Color for glassmorphism effect.", accountColor(new SettingColor(255, 255, 255, 10), new SettingColor(232, 213, 255, 18)));
-
-    // Outline
-
-    public final ThreeStateColorSetting outlineColor = new ThreeStateColorSetting(
-            sgOutline,
-            "outline",
-            accountColor(new SettingColor(50, 70, 100, 150), new SettingColor(122, 66, 186, 170)),
-            accountColor(new SettingColor(80, 110, 150, 200), new SettingColor(147, 88, 214, 210)),
-            accountColor(new SettingColor(100, 140, 200, 255), new SettingColor(192, 132, 252, 255))
-    );
-
-    // Separator
-
-    public final Setting<SettingColor> separatorText = color(sgSeparator, "separator-text", "Color of separator text", new SettingColor(255, 255, 255));
-    public final Setting<SettingColor> separatorCenter = color(sgSeparator, "separator-center", "Center color of separators.", accountColor(new SettingColor(255, 255, 255), new SettingColor(221, 214, 254)));
-    public final Setting<SettingColor> separatorEdges = color(sgSeparator, "separator-edges", "Color of separator edges.", accountColor(new SettingColor(225, 225, 225, 150), new SettingColor(192, 132, 252, 150)));
-
-    // Scrollbar
-
-    public final ThreeStateColorSetting scrollbarColor = new ThreeStateColorSetting(
-            sgScrollbar,
-            "Scrollbar",
-            accountColor(new SettingColor(30, 30, 30, 200), new SettingColor(54, 31, 78, 210)),
-            accountColor(new SettingColor(40, 40, 40, 200), new SettingColor(75, 43, 108, 220)),
-            accountColor(new SettingColor(50, 50, 50, 200), new SettingColor(98, 57, 140, 230))
-    );
-
-    // Slider
-
-    public final ThreeStateColorSetting sliderHandle = new ThreeStateColorSetting(
-            sgSlider,
-            "slider-handle",
-            new SettingColor(130, 0, 255),
-            new SettingColor(140, 30, 255),
-            new SettingColor(150, 60, 255)
-    );
-
-    public final Setting<SettingColor> sliderLeft = color(sgSlider, "slider-left", "Color of slider left part.", accountColor(new SettingColor(100, 35, 170), new SettingColor(126, 34, 206)));
-    public final Setting<SettingColor> sliderRight = color(sgSlider, "slider-right", "Color of slider right part.", accountColor(new SettingColor(50, 50, 50), new SettingColor(61, 35, 92)));
 
     // Starscript
 
@@ -265,10 +267,19 @@ public class FlorenceGuiTheme extends GuiTheme {
     private final Setting<SettingColor> starscriptKeywords = color(sgStarscript, "starscript-keywords", "Color of keywords in Starscript code.", new SettingColor(204, 120, 50));
     private final Setting<SettingColor> starscriptAccessedObjects = color(sgStarscript, "starscript-accessed-objects", "Color of accessed objects (before a dot) in Starscript code.", new SettingColor(152, 118, 170));
 
+    // Derived from the settings above
+    private Design design;
+    private int designAccent;
+    private final Color textColor = new Color();
+    private final Color textSecondaryColor = new Color();
+
     public FlorenceGuiTheme() {
-        super("Meteor");
+        super("Florence");
 
         settingsFactory = new DefaultSettingsWidgetFactory(this);
+
+        rebuildDesign();
+        configureMotion();
     }
 
     private Setting<SettingColor> color(SettingGroup group, String name, String description, SettingColor color) {
@@ -278,18 +289,85 @@ public class FlorenceGuiTheme extends GuiTheme {
                 .defaultValue(color)
                 .build());
     }
-    private Setting<SettingColor> color(String name, String description, SettingColor color) {
-        return color(sgColors, name, description, color);
+
+    // Design
+
+    /**
+     * The colors everything is drawn with.
+     */
+    public Design design() {
+        // The accent can be a rainbow, which changes the color without a setting being changed
+        if (packed(accentColor.get()) != designAccent) rebuildDesign();
+
+        return design;
     }
 
-    private static SettingColor accountColor(SettingColor defaultColor, SettingColor enderstormColor) {
-        return isEnderstormAccount() ? enderstormColor : defaultColor;
+    private void rebuildDesign() {
+        SettingColor accent = accentColor.get();
+        SettingColor accent2 = accentSecondaryColor.get();
+
+        designAccent = packed(accent);
+        design = Design.build(preset.get(), designAccent, packed(accent2), panelOpacity.get());
+
+        textColor.set(toColor(design.text));
+        textSecondaryColor.set(toColor(design.textSecondary));
     }
 
-    private static boolean isEnderstormAccount() {
-        return mc != null
-            && mc.getSession() != null
-            && ENDERSTORM_ACCOUNT.equals(mc.getSession().getUsername());
+    private void configureMotion() {
+        Motion.configure(animationSpeed.get(), reducedMotion.get());
+    }
+
+    private static int packed(Color color) {
+        return (color.a << 24) | (color.r << 16) | (color.g << 8) | color.b;
+    }
+
+    /**
+     * Converts a color packed as 0xAARRGGBB to a {@link Color}, for the places that still need one.
+     */
+    public static Color toColor(int argb) {
+        return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >>> 24);
+    }
+
+    @Override
+    public double pad() {
+        return space(7);
+    }
+
+    // Sizes
+
+    /**
+     * A distance in the units the GUI is laid out in, scaled by the GUI scale and the density.
+     */
+    public double space(double value) {
+        return scale(value * density.get().factor);
+    }
+
+    /** Corner radius of windows and menus. */
+    public double radiusLarge() {
+        return scale(cornerRadius.get());
+    }
+
+    /** Corner radius of buttons, fields and rows. */
+    public double radiusMedium() {
+        return scale(cornerRadius.get() * 0.6);
+    }
+
+    /** Corner radius of small things like checkboxes and keybind chips. */
+    public double radiusSmall() {
+        return scale(cornerRadius.get() * 0.35);
+    }
+
+    public boolean shadows() {
+        return shadows.get();
+    }
+
+    public boolean glass() {
+        return glass.get();
+    }
+
+    @Override
+    public int backdropBlurLevel() {
+        return glass.get() ? blurStrength.get() : 0;
     }
 
     // Widgets
@@ -346,6 +424,11 @@ public class FlorenceGuiTheme extends GuiTheme {
     }
 
     @Override
+    public WCheckbox toggle(boolean checked) {
+        return w(new WFlorenceSwitch(checked));
+    }
+
+    @Override
     public WSlider slider(double value, double min, double max) {
         return w(new WFlorenceSlider(value, min, max));
     }
@@ -387,9 +470,6 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     @Override
     public WWidget module(Module module, String title) {
-        if (expandableModules.get()) {
-            return w(new WFlorenceExpandableModule(module, title));
-        }
         return w(new WFlorenceModule(module, title));
     }
 
@@ -412,12 +492,14 @@ public class FlorenceGuiTheme extends GuiTheme {
 
     @Override
     public Color textColor() {
-        return textColor.get();
+        design();
+        return textColor;
     }
 
     @Override
     public Color textSecondaryColor() {
-        return textSecondaryColor.get();
+        design();
+        return textSecondaryColor;
     }
 
     //     Starscript
@@ -500,22 +582,6 @@ public class FlorenceGuiTheme extends GuiTheme {
         return hideHUD.get();
     }
 
-    public boolean roundedCorners() {
-        return roundedCorners.get();
-    }
-
-    public double cornerRadius() {
-        return scale(cornerRadius.get());
-    }
-
-    public boolean enableShadows() {
-        return enableShadows.get();
-    }
-
-    public boolean smoothAnimations() {
-        return smoothAnimations.get();
-    }
-
     public boolean snapToGrid() {
         return snapToGrid.get();
     }
@@ -540,34 +606,15 @@ public class FlorenceGuiTheme extends GuiTheme {
         return resizeWindowKeybind.get();
     }
 
-    public SettingColor accentSecondaryColor() {
-        return accentSecondaryColor.get();
-    }
+    public enum Density {
+        Compact(0.85),
+        Comfortable(1),
+        Spacious(1.2);
 
-    public SettingColor glassEffectColor() {
-        return glassEffectColor.get();
-    }
+        private final double factor;
 
-    public class ThreeStateColorSetting {
-        private final Setting<SettingColor> normal, hovered, pressed;
-
-        public ThreeStateColorSetting(SettingGroup group, String name, SettingColor c1, SettingColor c2, SettingColor c3) {
-            normal = color(group, name, "Color of " + name + ".", c1);
-            hovered = color(group, "hovered-" + name, "Color of " + name + " when hovered.", c2);
-            pressed = color(group, "pressed-" + name, "Color of " + name + " when pressed.", c3);
-        }
-
-        public SettingColor get() {
-            return normal.get();
-        }
-
-        public SettingColor get(boolean pressed, boolean hovered, boolean bypassDisableHoverColor) {
-            if (pressed) return this.pressed.get();
-            return (hovered && (bypassDisableHoverColor || !disableHoverColor)) ? this.hovered.get() : this.normal.get();
-        }
-
-        public SettingColor get(boolean pressed, boolean hovered) {
-            return get(pressed, hovered, false);
+        Density(double factor) {
+            this.factor = factor;
         }
     }
 }

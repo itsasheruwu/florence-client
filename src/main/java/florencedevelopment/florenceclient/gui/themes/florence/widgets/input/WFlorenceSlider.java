@@ -5,72 +5,64 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets.input;
 
+import florencedevelopment.florenceclient.gui.animation.AnimatedFloat;
+import florencedevelopment.florenceclient.gui.animation.Spring;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.input.WSlider;
-import florencedevelopment.florenceclient.utils.render.color.Color;
 
 public class WFlorenceSlider extends WSlider implements FlorenceWidget {
+    // How big the thumb is: 0 when idle, 1 when hovered or dragged
+    private final AnimatedFloat grow = new AnimatedFloat(0);
+
     public WFlorenceSlider(double value, double min, double max) {
         super(value, min, max);
     }
 
     @Override
+    protected double handleSize() {
+        return theme.textHeight() * 0.72;
+    }
+
+    @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+        FlorenceGuiTheme theme = theme();
+        Design d = design();
+
+        grow.springTo(dragging ? 1 : (handleMouseOver || mouseOver ? 0.6 : 0), Spring.SNAPPY);
+        double g = grow.update(delta);
+
+        double handle = handleSize();
         double valueWidth = valueWidth();
 
-        renderBar(renderer, valueWidth);
-        renderHandle(renderer, valueWidth);
-    }
+        double trackHeight = Math.max(3, theme.scale(4));
+        double trackX = x + handle / 2;
+        double trackWidth = width - handle;
+        double centerY = y + height / 2;
+        double trackY = centerY - trackHeight / 2;
 
-    private void renderBar(GuiRenderer renderer, double valueWidth) {
-        FlorenceGuiTheme theme = theme();
+        // Track and the filled part of it
+        renderer.roundRect(trackX, trackY, trackWidth, trackHeight, trackHeight / 2, d.trackOff);
 
-        double s = theme.scale(3);
-        double handleSize = handleSize();
+        double fill = Math.max(valueWidth, trackHeight);
+        renderer.roundRectHorizontal(trackX, trackY, fill, trackHeight, trackHeight / 2, d.accent, Colors.lerp(d.accent, d.accent2, trackWidth > 0 ? valueWidth / trackWidth : 0), 0, 0);
 
-        double x = this.x + handleSize / 2;
-        double y = this.y + height / 2 - s / 2;
+        // Thumb
+        double radius = handle * (0.5 + 0.15 * g);
+        double cx = trackX + valueWidth;
 
-        // Modern gradient bar
-        Color leftColor = theme.sliderLeft.get();
-        Color rightColor = theme.sliderRight.get();
-        
-        // Active portion with gradient
-        Color activeStart = new Color(leftColor.r, leftColor.g, leftColor.b, leftColor.a);
-        Color activeEnd = new Color(
-            Math.min(255, leftColor.r + 20),
-            Math.min(255, leftColor.g + 20),
-            Math.min(255, leftColor.b + 20),
-            leftColor.a
-        );
-        renderer.quad(x, y, valueWidth, s, activeStart, activeEnd, activeEnd, activeStart);
-
-        // Inactive portion
-        renderer.quad(x + valueWidth, y, width - valueWidth - handleSize, s, rightColor);
-    }
-
-    private void renderHandle(GuiRenderer renderer, double valueWidth) {
-        FlorenceGuiTheme theme = theme();
-        double s = handleSize();
-
-        // Modern handle with glow effect
-        Color handleColor = theme.sliderHandle.get(dragging, handleMouseOver);
-        
-        // Add glow shadow
-        if (theme.enableShadows() && (dragging || handleMouseOver)) {
-            Color glowColor = new Color(handleColor.r, handleColor.g, handleColor.b, 80);
-            renderer.quad(x + valueWidth - 1, y - 1, s + 2, s + 2, GuiRenderer.CIRCLE, glowColor);
+        if (theme.shadows()) {
+            renderer.shadow(cx - radius, centerY - radius + 1, radius * 2, radius * 2, radius, radius * 1.2, d.shadow);
         }
-        
-        // Main handle
-        renderer.quad(x + valueWidth, y, s, s, GuiRenderer.CIRCLE, handleColor);
-        
-        // Inner highlight
-        if (dragging || handleMouseOver) {
-            Color highlight = new Color(255, 255, 255, 100);
-            renderer.quad(x + valueWidth + s * 0.25, y + s * 0.25, s * 0.5, s * 0.5, GuiRenderer.CIRCLE, highlight);
+
+        renderer.circle(cx, centerY, radius, d.thumb);
+
+        if (g > 0.01) {
+            double ring = Math.max(1.5, theme.scale(2));
+            renderer.roundRect(cx - radius - ring, centerY - radius - ring, (radius + ring) * 2, (radius + ring) * 2, radius + ring, 0, ring, Colors.mulAlpha(d.accent, Math.min(1, g)));
         }
     }
 }

@@ -56,6 +56,18 @@ public abstract class GuiTheme implements ISerializable<GuiTheme> {
         disableHoverColor = false;
     }
 
+    /**
+     * How strongly the world behind the GUI should be blurred for glass surfaces, from 1 to
+     * {@link florencedevelopment.florenceclient.renderer.BackdropBlur#MAX_LEVEL}. 0 if the theme doesn't use glass.
+     */
+    public double windowWidth() {
+        return 240;
+    }
+
+    public int backdropBlurLevel() {
+        return 0;
+    }
+
     // Widgets
 
     public abstract WWindow window(WWidget icon, String title);
@@ -101,6 +113,13 @@ public abstract class GuiTheme implements ISerializable<GuiTheme> {
     public abstract WPlus plus();
 
     public abstract WCheckbox checkbox(boolean checked);
+
+    /**
+     * An on/off control for a setting, themes can draw it as something other than a checkbox.
+     */
+    public WCheckbox toggle(boolean checked) {
+        return checkbox(checked);
+    }
 
     public abstract WSlider slider(double value, double min, double max);
 

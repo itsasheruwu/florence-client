@@ -5,6 +5,7 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets;
 
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
@@ -17,31 +18,21 @@ public class WFlorenceHorizontalSeparator extends WHorizontalSeparator implement
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-        if (text == null) renderWithoutText(renderer);
-        else renderWithText(renderer);
-    }
-
-    private void renderWithoutText(GuiRenderer renderer) {
         FlorenceGuiTheme theme = theme();
-        double s = theme.scale(1);
-        double w = width / 2;
+        Design d = design();
 
-        renderer.quad(x, y + s, w, s, theme.separatorEdges.get(), theme.separatorCenter.get());
-        renderer.quad(x + w, y + s, w, s, theme.separatorCenter.get(), theme.separatorEdges.get());
-    }
+        double thickness = lineWidth();
+        double lineY = y + Math.round(height / 2.0) - thickness / 2;
 
-    private void renderWithText(GuiRenderer renderer) {
-        FlorenceGuiTheme theme = theme();
-        double s = theme.scale(2);
-        double h = theme.scale(1);
+        if (text == null) {
+            renderer.roundRect(x, lineY, width, thickness, thickness / 2, d.divider);
+            return;
+        }
 
-        double textStart = Math.round(width / 2.0 - textWidth / 2.0 - s);
-        double textEnd = s + textStart + textWidth + s;
+        // Small heading with a line running on from it
+        double gap = theme.space(8);
 
-        double offsetY = Math.round(height / 2.0);
-
-        renderer.quad(x, y + offsetY, textStart, h, theme.separatorEdges.get(), theme.separatorCenter.get());
-        renderer.text(text, x + textStart + s, y, theme.separatorText.get(), false);
-        renderer.quad(x + textEnd, y + offsetY, width - textEnd, h, theme.separatorCenter.get(), theme.separatorEdges.get());
+        renderer.text(text, x, y, d.textSecondary, false);
+        renderer.roundRect(x + textWidth + gap, lineY, Math.max(0, width - textWidth - gap), thickness, thickness / 2, d.divider);
     }
 }

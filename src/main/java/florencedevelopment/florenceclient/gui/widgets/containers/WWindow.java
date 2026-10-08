@@ -5,6 +5,8 @@
 
 package florencedevelopment.florenceclient.gui.widgets.containers;
 
+import florencedevelopment.florenceclient.gui.animation.Easing;
+import florencedevelopment.florenceclient.gui.animation.Motion;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.utils.Cell;
@@ -30,6 +32,12 @@ public abstract class WWindow extends WVerticalList {
     public double fixedWidth = -1;
     public Consumer<WContainer> beforeHeaderInit;
     public String id;
+
+    /** Small label shown at the right of the header, for example how many modules the window has. */
+    public String badge;
+
+    /** Color of the window's accents as 0xAARRGGBB, 0 to use the one of the theme. */
+    public int accent;
 
     public final WWidget icon;
     protected final String title;
@@ -145,14 +153,36 @@ public abstract class WWindow extends WVerticalList {
         }
     }
 
+    /**
+     * How much of the window below the header is shown, 0 to 1. It eases in and out unlike {@code animProgress}, which
+     * moves evenly.
+     */
+    protected double expandedAmount() {
+        return Easing.STANDARD.apply(animProgress);
+    }
+
+    /**
+     * Height of the window as it is drawn, which is less than {@code height} while it opens and closes.
+     */
+    protected double visibleHeight() {
+        return (height - header.height) * expandedAmount() + header.height;
+    }
+
     @Override
     public boolean render(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
         if (!visible) return true;
 
-        boolean scissor = (animProgress != 0 && animProgress != 1) || (expanded && animProgress != 1);
-        if (scissor) renderer.scissorStart(x, y, width, (height - header.height) * animProgress + header.height);
+        boolean animating = (animProgress != 0 && animProgress != 1) || (expanded && animProgress != 1);
+
+        // Every window is drawn in a scissor segment of its own. The renderer draws shapes first and text last within
+        // a segment, so without this the text of a window would show through the windows on top of it. The margin
+        // leaves room for the shadow.
+        double margin = theme.scale(48);
+        double visibleHeight = visibleHeight();
+
+        renderer.scissorStart(x - margin, y - margin, width + margin * 2, visibleHeight + margin + (animating ? 0 : margin));
         boolean toReturn = super.render(renderer, mouseX, mouseY, delta);
-        if (scissor) renderer.scissorEnd();
+        renderer.scissorEnd();
 
         return toReturn;
     }
@@ -534,10 +564,14 @@ public abstract class WWindow extends WVerticalList {
 
         @Override
         public boolean render(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-            animProgress += (expanded ? 1 : -1) * delta * 14;
+            double duration = Motion.duration(0.25);
+
+            if (duration <= 0) animProgress = expanded ? 1 : 0;
+            else animProgress += (expanded ? 1 : -1) * delta / duration;
+
             animProgress = MathHelper.clamp(animProgress, 0, 1);
 
-            triangle.rotation = (1 - animProgress) * -90;
+            if (triangle != null) triangle.rotation = (1 - expandedAmount()) * -90;
 
             return super.render(renderer, mouseX, mouseY, delta);
         }

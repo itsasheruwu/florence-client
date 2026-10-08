@@ -5,24 +5,46 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets.pressable;
 
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.pressable.WConfirmedMinus;
-import florencedevelopment.florenceclient.utils.render.color.Color;
 
 public class WFlorenceConfirmedMinus extends WConfirmedMinus implements FlorenceWidget {
+    private final Interaction ui = new Interaction();
+
+    @Override
+    protected void onCalculateSize() {
+        width = theme.textHeight() + theme().space(8);
+        height = width;
+    }
+
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
         FlorenceGuiTheme theme = theme();
-        double pad = pad();
-        double s = theme.scale(3);
+        Design d = design();
 
-        Color outline = theme.outlineColor.get(pressed, mouseOver);
-        Color fg = pressedOnce ? theme.backgroundColor.get(pressed, mouseOver) : theme().minusColor.get();
-        Color bg = pressedOnce ? theme().minusColor.get() : theme.backgroundColor.get(pressed, mouseOver);
+        ui.update(mouseOver, pressed, delta);
 
-        renderBackground(renderer, this, outline, bg);
-        renderer.quad(x + pad, y + height / 2 - s / 2, width - pad * 2, s, fg);
+        int color;
+
+        if (pressedOnce) {
+            // Waiting for the second click
+            renderer.roundRect(x, y, width, height, theme.radiusMedium(), Colors.lerp(Colors.withAlpha(d.danger, 210), d.danger, ui.hover()), lineWidth(), d.danger);
+            color = Colors.rgb(255, 255, 255);
+        }
+        else {
+            renderControl(renderer, this, ui);
+            color = d.danger;
+        }
+
+        double arm = width * 0.2;
+        double cx = x + width / 2;
+        double cy = y + height / 2;
+
+        renderer.line(cx - arm, cy, cx + arm, cy, theme.scale(2), color);
     }
 }

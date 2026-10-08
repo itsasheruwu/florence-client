@@ -36,7 +36,11 @@ public class HudElementScreen extends WindowScreen {
 
         this.element = element;
 
-        settings = new Settings();
+        settings = createAnchorSettings(element);
+    }
+
+    static Settings createAnchorSettings(HudElement element) {
+        Settings settings = new Settings();
         SettingGroup sg = settings.createGroup("Anchors");
         sg.add(new BoolSetting.Builder()
             .name("auto-anchors")
@@ -67,6 +71,7 @@ public class HudElementScreen extends WindowScreen {
             .onChanged(element.box::setYAnchor)
             .build()
         );
+        return settings;
     }
 
     @Override

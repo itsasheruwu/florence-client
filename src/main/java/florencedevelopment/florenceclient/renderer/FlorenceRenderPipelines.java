@@ -136,6 +136,19 @@ public abstract class FlorenceRenderPipelines {
         .build()
     );
 
+    public static final RenderPipeline UI_SHAPE = add(new ExtendedRenderPipelineBuilder(MESH_UNIFORMS)
+        .withLocation(FlorenceClient.identifier("pipeline/ui_shape"))
+        .withVertexFormat(FlorenceVertexFormats.POS2_SHAPE, VertexFormat.DrawMode.TRIANGLES)
+        .withVertexShader(FlorenceClient.identifier("shaders/ui_shape.vert"))
+        .withFragmentShader(FlorenceClient.identifier("shaders/ui_shape.frag"))
+        .withSampler("u_Backdrop")
+        .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+        .withDepthWrite(false)
+        .withBlend(BlendFunction.TRANSLUCENT)
+        .withCull(true)
+        .build()
+    );
+
     // Post Process
 
     public static final RenderPipeline POST_OUTLINE = add(new ExtendedRenderPipelineBuilder()

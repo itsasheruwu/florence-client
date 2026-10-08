@@ -14,6 +14,7 @@ import florencedevelopment.florenceclient.events.florence.ActiveModulesChangedEv
 import florencedevelopment.florenceclient.events.florence.KeyEvent;
 import florencedevelopment.florenceclient.events.florence.ModuleBindChangedEvent;
 import florencedevelopment.florenceclient.events.florence.MouseClickEvent;
+import florencedevelopment.florenceclient.gui.search.FuzzyMatcher;
 import florencedevelopment.florenceclient.pathing.BaritoneUtils;
 import florencedevelopment.florenceclient.settings.Setting;
 import florencedevelopment.florenceclient.settings.SettingGroup;
@@ -149,47 +150,66 @@ public class Modules extends System<Modules> {
         return active;
     }
 
+    /**
+     * Finds the modules that match what was typed, best match first. Modules that don't match are left out.
+     */
     public List<Pair<Module, String>> searchTitles(String text) {
-        Map<Pair<Module, String>, Integer> modules = new HashMap<>();
+        record Match(Module module, String title, int score) {}
+
+        List<Match> matches = new ArrayList<>();
 
         for (Module module : this.moduleInstances.values()) {
             String title = module.title;
-            int score = Utils.searchLevenshteinDefault(title, text, false);
+            int score = FuzzyMatcher.score(text, module.title);
 
             if (Config.get().moduleAliases.get()) {
                 for (String alias : module.aliases) {
-                    int aliasScore = Utils.searchLevenshteinDefault(alias, text, false);
-                    if (aliasScore < score) {
+                    int aliasScore = FuzzyMatcher.score(text, alias);
+
+                    if (aliasScore > score) {
                         title = module.title + " (" + alias + ")";
                         score = aliasScore;
                     }
                 }
             }
 
-            modules.put(new Pair<>(module, title), score);
+            if (score != FuzzyMatcher.NO_MATCH) matches.add(new Match(module, title, score));
         }
 
-        List<Pair<Module, String>> l = new ArrayList<>(modules.keySet());
-        l.sort(Comparator.comparingInt(modules::get));
+        matches.sort(Comparator.comparingInt(Match::score).reversed().thenComparing(match -> match.module().title));
 
-        return l;
+        List<Pair<Module, String>> result = new ArrayList<>(matches.size());
+        for (Match match : matches) result.add(new Pair<>(match.module(), match.title()));
+
+        return result;
     }
 
+    /**
+     * Finds the modules that have a setting matching what was typed, the best match first.
+     */
     public Set<Module> searchSettingTitles(String text) {
-        Map<Module, Integer> modules = new ValueComparableMap<>(Comparator.naturalOrder());
+        record Match(Module module, int score) {}
+
+        List<Match> matches = new ArrayList<>();
 
         for (Module module : this.moduleInstances.values()) {
-            int lowest = Integer.MAX_VALUE;
+            int best = FuzzyMatcher.NO_MATCH;
+
             for (SettingGroup sg : module.settings) {
                 for (Setting<?> setting : sg) {
-                    int score = Utils.searchLevenshteinDefault(setting.title, text, false);
-                    if (score < lowest) lowest = score;
+                    best = Math.max(best, FuzzyMatcher.score(text, setting.title));
                 }
             }
-            modules.put(module, modules.getOrDefault(module, 0) + lowest);
+
+            if (best != FuzzyMatcher.NO_MATCH) matches.add(new Match(module, best));
         }
 
-        return modules.keySet();
+        matches.sort(Comparator.comparingInt(Match::score).reversed().thenComparing(match -> match.module().title));
+
+        Set<Module> result = new LinkedHashSet<>();
+        for (Match match : matches) result.add(match.module());
+
+        return result;
     }
 
     void addActive(Module module) {
@@ -221,6 +241,13 @@ public class Modules extends System<Modules> {
      */
     public void awaitKeyRelease() {
         this.awaitingKeyRelease = true;
+    }
+
+    /**
+     * Whether the next key or button press is going to be the keybind of this module.
+     */
+    public boolean isBinding(Module module) {
+        return moduleToBind == module;
     }
 
     public boolean isBinding() {

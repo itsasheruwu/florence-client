@@ -5,6 +5,10 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets.input;
 
+import florencedevelopment.florenceclient.gui.animation.AnimatedFloat;
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
@@ -14,14 +18,15 @@ import florencedevelopment.florenceclient.gui.widgets.WWidget;
 import florencedevelopment.florenceclient.gui.widgets.containers.WContainer;
 import florencedevelopment.florenceclient.gui.widgets.containers.WVerticalList;
 import florencedevelopment.florenceclient.gui.widgets.input.WTextBox;
-import florencedevelopment.florenceclient.utils.render.color.Color;
-import net.minecraft.util.math.MathHelper;
 
 public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
+    private final Interaction ui = new Interaction();
+    private final AnimatedFloat focus = new AnimatedFloat(0);
+
     private boolean cursorVisible;
     private double cursorTimer;
 
-    private double animProgress;
+    private double cursorAlpha;
 
     public WFlorenceTextBox(String text, String placeholder, CharFilter filter, Class<? extends Renderer> renderer) {
         super(text, placeholder, filter, renderer);
@@ -33,19 +38,22 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
             @Override
             protected void onRender(GuiRenderer renderer1, double mouseX, double mouseY, double delta) {
                 FlorenceGuiTheme theme1 = theme();
-                double s = theme1.scale(2);
-                Color c = theme1.outlineColor.get();
+                Design d = design();
 
-                Color col = theme1.backgroundColor.get();
-                int preA = col.a;
-                col.a += col.a / 2;
-                col.validate();
-                renderer1.quad(this, col);
-                col.a = preA;
+                if (theme1.shadows()) renderer1.shadow(x, y + 2, width, height, theme1.radiusMedium(), theme1.scale(12), d.shadow);
+                renderer1.roundRect(x, y, width, height, theme1.radiusMedium(), Colors.withAlpha(d.header, 252), lineWidth(), d.outlineHover);
+            }
 
-                renderer1.quad(x, y + height - s, width, s, c);
-                renderer1.quad(x, y, s, height - s, c);
-                renderer1.quad(x + width - s, y, s, height - s, c);
+            private FlorenceGuiTheme theme() {
+                return (FlorenceGuiTheme) theme;
+            }
+
+            private Design design() {
+                return theme().design();
+            }
+
+            private double lineWidth() {
+                return Math.max(1, Math.round(theme().scale(1)));
             }
         };
     }
@@ -57,8 +65,6 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
     }
 
     private static class CompletionItem extends WFlorenceLabel implements ICompletionItem {
-        private static final Color SELECTED_COLOR = new Color(255, 255, 255, 15);
-
         private boolean selected;
 
         public CompletionItem(String text, boolean title, boolean selected) {
@@ -68,9 +74,12 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
 
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-            super.onRender(renderer, mouseX, mouseY, delta);
+            if (selected) {
+                FlorenceGuiTheme theme = theme();
+                renderer.roundRect(x - theme.space(4), y - theme.space(2), width + theme.space(8), height + theme.space(4), theme.radiusSmall(), design().accentSoft);
+            }
 
-            if (selected) renderer.quad(this, SELECTED_COLOR);
+            super.onRender(renderer, mouseX, mouseY, delta);
         }
 
         @Override
@@ -89,6 +98,18 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
         }
     }
 
+    private int lastLength = -1;
+
+    @Override
+    protected void onCalculateSize() {
+        super.onCalculateSize();
+
+        // As wide as what is in it, with room for a few more characters. Text boxes that are stretched or have a
+        // minimum width are not affected by this.
+        String shown = text.isEmpty() ? "000" : text;
+        width = pad() * 2 + theme.textWidth(shown) + theme.scale(4);
+    }
+
     @Override
     protected void onCursorChanged() {
         cursorVisible = true;
@@ -97,6 +118,9 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+        FlorenceGuiTheme theme = theme();
+        Design d = design();
+
         if (cursorTimer >= 1) {
             cursorVisible = !cursorVisible;
             cursorTimer = 0;
@@ -105,20 +129,40 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
             cursorTimer += delta * 1.75;
         }
 
-        renderBackground(renderer, this, false, false);
+        // Resize when the text gets longer or shorter
+        if (text.length() != lastLength) {
+            if (lastLength != -1) invalidate();
+            lastLength = text.length();
+        }
 
-        FlorenceGuiTheme theme = theme();
+        ui.update(mouseOver, false, delta);
+        focus.animateTo(focused ? 1 : 0, 0.15);
+        double f = focus.update(delta);
+
+        // Field
+        int fill = Colors.lerp(Colors.lerp(d.field, d.fieldHover, ui.hover()), d.fieldFocus, f);
+        int border = Colors.lerp(Colors.lerp(d.outline, d.outlineHover, ui.hover()), d.accent, f);
+
+        // Soft ring around the field while it has focus
+        if (f > 0.01) {
+            double ring = Math.max(2, theme.scale(2.5));
+            renderer.roundRect(x - ring, y - ring, width + ring * 2, height + ring * 2, theme.radiusMedium() + ring, 0, ring, Colors.mulAlpha(d.accent, 0.3 * f));
+        }
+
+        renderer.roundRect(x, y, width, height, theme.radiusMedium(), fill, lineWidth(), border);
+
         double pad = pad();
         double overflowWidth = getOverflowWidthForRender();
+        double textY = y + (height - theme.textHeight()) / 2;
 
-        renderer.scissorStart(x + pad, y + pad, width - pad * 2, height - pad * 2);
+        renderer.scissorStart(x + pad, y, width - pad * 2, height);
 
         // Text content
         if (!text.isEmpty()) {
-            this.renderer.render(renderer, x + pad - overflowWidth, y + pad, text, theme.textColor.get());
+            this.renderer.render(renderer, x + pad - overflowWidth, textY, text, theme.textColor());
         }
         else if (placeholder != null) {
-            this.renderer.render(renderer, x + pad - overflowWidth, y + pad, placeholder, theme.placeholderColor.get());
+            renderer.text(placeholder, x + pad - overflowWidth, textY, d.textDisabled, false);
         }
 
         // Text highlighting
@@ -126,17 +170,19 @@ public class WFlorenceTextBox extends WTextBox implements FlorenceWidget {
             double selStart = x + pad + getTextWidth(selectionStart) - overflowWidth;
             double selEnd = x + pad + getTextWidth(selectionEnd) - overflowWidth;
 
-            renderer.quad(selStart, y + pad, selEnd - selStart, theme.textHeight(), theme.textHighlightColor.get());
+            renderer.roundRect(selStart, textY, selEnd - selStart, theme.textHeight(), theme.radiusSmall() * 0.5, Colors.withAlpha(d.accent, 90));
         }
 
         // Cursor
-        animProgress += delta * 10 * (focused && cursorVisible ? 1 : -1);
-        animProgress = MathHelper.clamp(animProgress, 0, 1);
+        cursorAlpha += delta * 10 * (focused && cursorVisible ? 1 : -1);
+        cursorAlpha = Math.max(0, Math.min(1, cursorAlpha));
 
-        if ((focused && cursorVisible) || animProgress > 0) {
-            renderer.setAlpha(animProgress);
-            renderer.quad(x + pad + getTextWidth(cursor) - overflowWidth, y + pad, theme.scale(1), theme.textHeight(), theme.textColor.get());
-            renderer.setAlpha(1);
+        if ((focused && cursorVisible) || cursorAlpha > 0) {
+            renderer.line(
+                x + pad + getTextWidth(cursor) - overflowWidth, textY,
+                x + pad + getTextWidth(cursor) - overflowWidth, textY + theme.textHeight(),
+                Math.max(1, theme.scale(1.5)), Colors.mulAlpha(d.text, cursorAlpha)
+            );
         }
 
         renderer.scissorEnd();

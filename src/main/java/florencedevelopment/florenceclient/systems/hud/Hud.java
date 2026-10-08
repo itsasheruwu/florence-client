@@ -29,7 +29,7 @@ import java.util.*;
 import static florencedevelopment.florenceclient.FlorenceClient.mc;
 
 public class Hud extends System<Hud> implements Iterable<HudElement> {
-    public static final HudGroup GROUP = new HudGroup("Meteor");
+    public static final HudGroup GROUP = new HudGroup("Florence");
 
     public boolean active;
     public Settings settings = new Settings();

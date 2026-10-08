@@ -23,6 +23,7 @@ public class Tabs {
     @PreInit(dependencies = PathManagers.class)
     public static void init() {
         add(new ModulesTab());
+        add(new LegitTab());
         add(new ConfigTab());
         add(new GuiTab());
         add(new HudTab());

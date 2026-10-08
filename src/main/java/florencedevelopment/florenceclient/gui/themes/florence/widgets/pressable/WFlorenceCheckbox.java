@@ -5,68 +5,53 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets.pressable;
 
+import florencedevelopment.florenceclient.gui.animation.AnimatedFloat;
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.animation.Spring;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.pressable.WCheckbox;
-import florencedevelopment.florenceclient.utils.render.color.Color;
-import net.minecraft.util.math.MathHelper;
 
 public class WFlorenceCheckbox extends WCheckbox implements FlorenceWidget {
-    private double animProgress;
+    private final Interaction ui = new Interaction();
+    private final AnimatedFloat check;
 
     public WFlorenceCheckbox(boolean checked) {
         super(checked);
-        animProgress = checked ? 1 : 0;
+        check = new AnimatedFloat(checked ? 1 : 0);
     }
 
-    private double hoverProgress = 0;
+    @Override
+    protected void onCalculateSize() {
+        width = theme.textHeight() + theme().space(4);
+        height = width;
+    }
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
         FlorenceGuiTheme theme = theme();
+        Design d = design();
 
-        // Smooth animation
-        double animSpeed = theme.smoothAnimations() ? 14 : 20;
-        animProgress += (checked ? 1 : -1) * delta * animSpeed;
-        animProgress = MathHelper.clamp(animProgress, 0, 1);
+        ui.update(mouseOver, pressed, delta);
 
-        // Smooth hover animation
-        if (theme.smoothAnimations()) {
-            double target = mouseOver ? 1 : 0;
-            hoverProgress += (target - hoverProgress) * delta * 14;
-            hoverProgress = Math.max(0, Math.min(1, hoverProgress));
-        } else {
-            hoverProgress = mouseOver ? 1 : 0;
-        }
+        check.springTo(checked ? 1 : 0, Spring.SNAPPY);
+        double p = Math.max(0, Math.min(1, check.update(delta)));
 
-        // Modern background with hover effect
-        Color bgColor = theme.backgroundColor.get(pressed, mouseOver);
-        if (hoverProgress > 0 && !pressed) {
-            Color accentColor = theme.accentColor.get();
-            bgColor = new Color(
-                (int)(bgColor.r + (accentColor.r - bgColor.r) * hoverProgress * 0.1),
-                (int)(bgColor.g + (accentColor.g - bgColor.g) * hoverProgress * 0.1),
-                (int)(bgColor.b + (accentColor.b - bgColor.b) * hoverProgress * 0.1),
-                bgColor.a
-            );
-        }
-        
-        renderBackground(renderer, this, theme.outlineColor.get(pressed, mouseOver), bgColor);
+        int fill = Colors.lerp(Colors.lerp(d.field, d.fieldHover, ui.hover()), Colors.lerp(d.accent, d.accentHover, ui.hover()), p);
+        int border = Colors.lerp(Colors.lerp(d.outline, d.outlineHover, ui.hover()), d.accent, p);
 
-        // Modern checkmark with smooth animation
-        if (animProgress > 0) {
-            Color checkColor = theme.checkboxColor.get();
-            
-            // Add glow effect
-            if (theme.enableShadows() && animProgress > 0.5) {
-                Color glowColor = new Color(checkColor.r, checkColor.g, checkColor.b, (int)(checkColor.a * 0.3 * animProgress));
-                double glowSize = (width - theme.scale(2)) / 1.75 * animProgress + 2;
-                renderer.quad(x + (width - glowSize) / 2, y + (height - glowSize) / 2, glowSize, glowSize, GuiRenderer.CIRCLE, glowColor);
-            }
-            
-            double cs = (width - theme.scale(2)) / 1.75 * animProgress;
-            renderer.quad(x + (width - cs) / 2, y + (height - cs) / 2, cs, cs, GuiRenderer.CIRCLE, checkColor);
+        renderer.roundRect(x, y, width, height, theme.radiusSmall(), fill, lineWidth(), border);
+
+        if (p > 0.01) {
+            // Check mark
+            double t = theme.scale(2);
+            int color = Colors.mulAlpha(d.textOnAccent, p);
+
+            renderer.line(x + width * 0.27, y + height * 0.52, x + width * 0.43, y + height * 0.68, t, color);
+            renderer.line(x + width * 0.43, y + height * 0.68, x + width * 0.74, y + height * 0.34, t, color);
         }
     }
 }

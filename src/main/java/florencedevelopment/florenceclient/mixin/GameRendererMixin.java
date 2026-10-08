@@ -170,7 +170,7 @@ public abstract class GameRendererMixin {
 
             var context = new DrawContext(client, guiState, mouseX, mouseY);
 
-            widgetScreen.renderCustom(context, mouseX, mouseY, tickCounter.getDynamicDeltaTicks());
+            widgetScreen.renderCustom(context, mouseX, mouseY);
 
             RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(client.getFramebuffer().getDepthAttachment(), 1.0);
             guiRenderer.render(fogRenderer.getFogBuffer(FogRenderer.FogType.NONE));

@@ -5,6 +5,8 @@
 
 package florencedevelopment.florenceclient.settings;
 
+import florencedevelopment.florenceclient.FlorenceClient;
+import florencedevelopment.florenceclient.events.gui.SettingChangedEvent;
 import florencedevelopment.florenceclient.systems.modules.Module;
 import florencedevelopment.florenceclient.utils.Utils;
 import florencedevelopment.florenceclient.utils.misc.IGetter;
@@ -33,6 +35,9 @@ public abstract class Setting<T> implements IGetter<T>, ISerializable<T> {
 
     public Module module;
     public boolean lastWasVisible;
+
+    // Set while the value is being read from a saved config
+    private boolean loading;
 
     public Setting(String name, String description, T defaultValue, Consumer<T> onChanged, Consumer<Setting<T>> onModuleActivated, IVisible visible) {
         this.name = name;
@@ -90,6 +95,8 @@ public abstract class Setting<T> implements IGetter<T>, ISerializable<T> {
 
     public void onChanged() {
         if (onChanged != null) onChanged.accept(value);
+
+        FlorenceClient.EVENT_BUS.post(SettingChangedEvent.get(this, loading ? SettingChangedEvent.Source.LOAD : SettingChangedEvent.Source.USER));
     }
 
     public void onActivated() {
@@ -129,7 +136,13 @@ public abstract class Setting<T> implements IGetter<T>, ISerializable<T> {
     @Override
     public T fromTag(NbtCompound tag) {
         T value = load(tag);
-        onChanged();
+
+        loading = true;
+        try {
+            onChanged();
+        } finally {
+            loading = false;
+        }
 
         return value;
     }

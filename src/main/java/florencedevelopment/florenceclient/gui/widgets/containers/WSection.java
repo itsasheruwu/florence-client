@@ -5,6 +5,8 @@
 
 package florencedevelopment.florenceclient.gui.widgets.containers;
 
+import florencedevelopment.florenceclient.gui.animation.Easing;
+import florencedevelopment.florenceclient.gui.animation.Motion;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.utils.Cell;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
@@ -59,6 +61,13 @@ public abstract class WSection extends WVerticalList {
         return expanded;
     }
 
+    /**
+     * How much of the content is shown, 0 to 1. It eases in and out unlike {@code animProgress}, which moves evenly.
+     */
+    protected double expandedAmount() {
+        return Easing.STANDARD.apply(animProgress);
+    }
+
     @Override
     protected void onCalculateSize() {
         if (forcedHeight == -1) {
@@ -77,7 +86,7 @@ public abstract class WSection extends WVerticalList {
         if (firstTime) {
             firstTime = false;
 
-            forcedHeight = (actualHeight - header.height) * animProgress + header.height;
+            forcedHeight = (actualHeight - header.height) * expandedAmount() + header.height;
             onCalculateSize();
         }
     }
@@ -88,16 +97,20 @@ public abstract class WSection extends WVerticalList {
 
         double preProgress = animProgress;
 
-        animProgress += (expanded ? 1 : -1) * delta * 14;
+        double duration = Motion.duration(0.25);
+
+        if (duration <= 0) animProgress = expanded ? 1 : 0;
+        else animProgress += (expanded ? 1 : -1) * delta / duration;
+
         animProgress = MathHelper.clamp(animProgress, 0, 1);
 
         if (animProgress != preProgress) {
-            forcedHeight = (actualHeight - header.height) * animProgress + header.height;
+            forcedHeight = (actualHeight - header.height) * expandedAmount() + header.height;
             invalidate();
         }
 
         boolean scissor = (animProgress != 0 && animProgress != 1) || (expanded && animProgress != 1);
-        if (scissor) renderer.scissorStart(x, y, width, (height - header.height) * animProgress + header.height);
+        if (scissor) renderer.scissorStart(x, y, width, (height - header.height) * expandedAmount() + header.height);
         boolean toReturn = super.render(renderer, mouseX, mouseY, delta);
         if (scissor) renderer.scissorEnd();
 

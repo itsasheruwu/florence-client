@@ -5,6 +5,9 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets;
 
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
@@ -43,14 +46,26 @@ public class WFlorenceSection extends WSection {
 
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-            triangle.rotation = (1 - animProgress) * -90;
+            triangle.rotation = (1 - expandedAmount()) * -90;
         }
     }
 
     protected static class WHeaderTriangle extends WTriangle implements FlorenceWidget {
+        private final Interaction ui = new Interaction();
+
+        @Override
+        protected void onCalculateSize() {
+            width = theme.textHeight();
+            height = width;
+        }
+
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-            renderer.rotatedQuad(x, y, width, height, rotation, GuiRenderer.TRIANGLE, theme().textColor.get());
+            Design d = design();
+
+            ui.update(mouseOver, pressed, delta);
+
+            chevron(renderer, x + width / 2, y + height / 2, width * 0.5, rotation, theme.scale(2), Colors.lerp(d.textSecondary, d.text, ui.hover()));
         }
     }
 }

@@ -10,6 +10,11 @@ import com.mojang.blaze3d.vertex.VertexFormatElement;
 public abstract class FlorenceVertexFormatElements {
     public static final VertexFormatElement POS2 = VertexFormatElement.register(getNextVertexFormatElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.POSITION, 2);
 
+    // Shape pipeline, see FlorenceVertexFormats.POS2_SHAPE
+    public static final VertexFormatElement SHAPE_A = VertexFormatElement.register(getNextVertexFormatElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 4);
+    public static final VertexFormatElement SHAPE_B = VertexFormatElement.register(getNextVertexFormatElementId(), 0, VertexFormatElement.Type.FLOAT, VertexFormatElement.Usage.GENERIC, 4);
+    public static final VertexFormatElement COLOR2 = VertexFormatElement.register(getNextVertexFormatElementId(), 0, VertexFormatElement.Type.UBYTE, VertexFormatElement.Usage.COLOR, 4);
+
     private FlorenceVertexFormatElements() {}
 
     private static int getNextVertexFormatElementId() {

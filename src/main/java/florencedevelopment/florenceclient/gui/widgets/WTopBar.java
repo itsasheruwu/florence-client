@@ -29,12 +29,23 @@ public abstract class WTopBar extends WHorizontalList {
     @Override
     public void init() {
         for (Tab tab : Tabs.get()) {
-            add(new WTopBarButton(tab));
+            add(createButton(tab));
         }
     }
 
+    protected WTopBarButton createButton(Tab tab) {
+        return new WTopBarButton(tab);
+    }
+
     protected class WTopBarButton extends WPressable {
-        private final Tab tab;
+        protected final Tab tab;
+
+        /**
+         * Whether the screen that is open belongs to this button's tab.
+         */
+        public boolean isCurrent() {
+            return mc.currentScreen instanceof TabScreen && ((TabScreen) mc.currentScreen).tab == tab;
+        }
 
         public WTopBarButton(Tab tab) {
             this.tab = tab;

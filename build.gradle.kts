@@ -106,6 +106,11 @@ dependencies {
     jij(libs.netty.handler.proxy) { isTransitive = false }
     jij(libs.netty.codec.socks) { isTransitive = false }
     jij(libs.waybackauthlib)
+
+    // Tests
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 sourceSets {
@@ -169,6 +174,10 @@ tasks {
         filesMatching("fabric.mod.json") {
             expand(propertyMap)
         }
+    }
+
+    test {
+        useJUnitPlatform()
     }
 
     // Compile launcher with Java 8 for backwards compatibility

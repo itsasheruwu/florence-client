@@ -5,13 +5,17 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence.widgets.input;
 
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.input.WDropdown;
-import florencedevelopment.florenceclient.utils.render.color.Color;
 
 public class WFlorenceDropdown<T> extends WDropdown<T> implements FlorenceWidget {
+    private final Interaction ui = new Interaction();
+
     public WFlorenceDropdown(T[] values, T value) {
         super(values, value);
     }
@@ -26,126 +30,96 @@ public class WFlorenceDropdown<T> extends WDropdown<T> implements FlorenceWidget
         return new WValue();
     }
 
-    private double hoverProgress = 0;
+    @Override
+    protected void onCalculateSize() {
+        FlorenceGuiTheme theme = theme();
+
+        maxValueWidth = 0;
+        for (T value : values) {
+            maxValueWidth = Math.max(maxValueWidth, theme.textWidth(value.toString()));
+        }
+
+        root.calculateSize();
+
+        double padX = theme.space(10);
+        double padY = theme.space(6);
+
+        width = padX + maxValueWidth + theme.space(10) + theme.textHeight() * 0.6 + padX;
+        height = padY + theme.textHeight() + padY;
+
+        root.width = width;
+    }
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
         FlorenceGuiTheme theme = theme();
-        double pad = pad();
-        double s = theme.textHeight();
+        Design d = design();
 
-        // Smooth hover animation
-        if (theme.smoothAnimations()) {
-            double target = mouseOver ? 1 : 0;
-            hoverProgress += (target - hoverProgress) * delta * 14;
-            hoverProgress = Math.max(0, Math.min(1, hoverProgress));
-        } else {
-            hoverProgress = mouseOver ? 1 : 0;
-        }
+        ui.update(mouseOver || expanded, pressed, delta);
 
-        // Modern background with hover effect
-        renderBackground(renderer, this, pressed, mouseOver);
+        // Square off the bottom corners while the list is attached to them
+        double radius = theme.radiusMedium();
+        double open = animProgress;
+        double bottom = radius * (1 - open);
 
-        // Add accent border on hover
-        if (hoverProgress > 0 && !pressed && theme.enableShadows()) {
-            Color accentColor = theme.accentColor.get();
-            Color borderColor = new Color(accentColor.r, accentColor.g, accentColor.b, (int)(hoverProgress * 100));
-            double borderWidth = theme.scale(1);
-            renderer.quad(x, y, width, borderWidth, borderColor);
-            renderer.quad(x, y + height - borderWidth, width, borderWidth, borderColor);
-            renderer.quad(x, y + borderWidth, borderWidth, height - borderWidth * 2, borderColor);
-            renderer.quad(x + width - borderWidth, y + borderWidth, borderWidth, height - borderWidth * 2, borderColor);
-        }
+        int fill = Colors.lerp(d.field, d.fieldHover, Math.max(ui.hover(), open));
+        int border = Colors.lerp(d.outline, Colors.withAlpha(d.accent, 190), Math.max(ui.hover() * 0.8, open));
+
+        renderer.roundRect(x, y, width, height, radius, radius, bottom, bottom, fill, lineWidth(), border);
 
         String text = get().toString();
-        double w = theme.textWidth(text);
-        
-        // Text color with hover effect
-        Color textColor = theme.textColor.get();
-        if (hoverProgress > 0 && !pressed) {
-            Color accentColor = theme.accentColor.get();
-            textColor = new Color(
-                (int)(textColor.r + (accentColor.r - textColor.r) * hoverProgress * 0.2),
-                (int)(textColor.g + (accentColor.g - textColor.g) * hoverProgress * 0.2),
-                (int)(textColor.b + (accentColor.b - textColor.b) * hoverProgress * 0.2),
-                textColor.a
-            );
-        }
-        
-        renderer.text(text, x + pad + maxValueWidth / 2 - w / 2, y + pad, textColor, false);
+        double padX = theme.space(10);
+        renderer.text(text, x + padX, y + (height - theme.textHeight()) / 2, d.text, false);
 
-        // Modern triangle icon with color transition
-        Color triangleColor = hoverProgress > 0 && !pressed ? theme.accentColor.get() : theme.textColor.get();
-        renderer.rotatedQuad(x + pad + maxValueWidth + pad, y + pad, s, s, 0, GuiRenderer.TRIANGLE, triangleColor);
+        // Chevron that turns upside down when the list is open
+        double s = theme.textHeight() * 0.6;
+        chevron(renderer, x + width - padX - s / 2, y + height / 2, s, 180 * open, theme.scale(2), Colors.lerp(d.textSecondary, d.text, Math.max(ui.hover(), open)));
     }
 
     private static class WRoot extends WDropdownRoot implements FlorenceWidget {
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
             FlorenceGuiTheme theme = theme();
-            double s = theme.scale(2);
-            
-            // Modern dropdown background with glass effect
-            Color bgColor = theme.backgroundColor.get();
-            renderer.quad(x, y, width, height, bgColor);
-            
-            // Glass effect overlay
-            if (theme.enableShadows()) {
-                Color glassColor = theme.glassEffectColor();
-                renderer.quad(x, y, width, height, glassColor);
-            }
-            
-            // Modern outline with gradient
-            Color outlineColor = theme.outlineColor.get();
-            renderer.quad(x, y + height - s, width, s, outlineColor);
-            renderer.quad(x, y, s, height - s, outlineColor);
-            renderer.quad(x + width - s, y, s, height - s, outlineColor);
+            Design d = design();
+
+            double radius = theme.radiusMedium();
+            renderer.roundRect(x, y, width, height, 0, 0, radius, radius, Colors.withAlpha(d.header, 252), lineWidth(), d.outlineHover);
         }
     }
 
     private class WValue extends WDropdownValue implements FlorenceWidget {
+        private final Interaction ui = new Interaction();
+
         @Override
         protected void onCalculateSize() {
-            double pad = pad();
+            FlorenceGuiTheme theme = theme();
 
-            width = pad + theme.textWidth(value.toString()) + pad;
-            height = pad + theme.textHeight() + pad;
+            width = theme.space(10) + theme.textWidth(value.toString()) + theme.space(10);
+            height = theme.space(5) + theme.textHeight() + theme.space(5);
         }
 
         @Override
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
             FlorenceGuiTheme theme = theme();
+            Design d = design();
 
-            // Modern hover effect
-            Color color = theme.backgroundColor.get(pressed, mouseOver, true);
-            
-            // Add accent tint on hover
-            if (mouseOver && !pressed) {
-                Color accentColor = theme.accentColor.get();
-                color = new Color(
-                    (int)(color.r + (accentColor.r - color.r) * 0.15),
-                    (int)(color.g + (accentColor.g - color.g) * 0.15),
-                    (int)(color.b + (accentColor.b - color.b) * 0.15),
-                    color.a
-                );
+            ui.update(mouseOver, pressed, delta);
+
+            boolean selected = WFlorenceDropdown.this.value.equals(value);
+
+            if (ui.hover() > 0.01 || selected) {
+                int color = selected ? Colors.lerp(d.accentSoft, Colors.withAlpha(d.accent, 80), ui.hover()) : Colors.withAlpha(d.accentSoft, (int) (Colors.alpha(d.accentSoft) * ui.hover()));
+                renderer.roundRect(x, y, width, height, theme.radiusSmall(), color);
             }
-            
-            int preA = color.a;
-            color.a += color.a / 2;
-            color.validate();
 
-            renderer.quad(this, color);
-
-            color.a = preA;
-
-            // Text with hover effect
-            Color textColor = theme.textColor.get();
-            if (mouseOver && !pressed) {
-                textColor = theme.accentColor.get();
-            }
-            
             String text = value.toString();
-            renderer.text(text, x + width / 2 - theme.textWidth(text) / 2, y + pad(), textColor, false);
+            int textColor = selected ? d.text : Colors.lerp(d.textSecondary, d.text, ui.hover());
+            renderer.text(text, x + theme.space(10), y + (height - theme.textHeight()) / 2, textColor, false);
+
+            if (selected) {
+                double dot = theme.scale(5);
+                renderer.circle(x + width - theme.space(10) - dot / 2, y + height / 2, dot / 2, d.accent);
+            }
         }
     }
 }

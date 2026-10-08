@@ -100,6 +100,37 @@ public class MeshBuilder {
         return this;
     }
 
+    public MeshBuilder vec4(double x, double y, double z, double w) {
+        debugVertexBufferCapacity();
+
+        long p = verticesPointer;
+
+        memPutFloat(p, (float) x);
+        memPutFloat(p + 4, (float) y);
+        memPutFloat(p + 8, (float) z);
+        memPutFloat(p + 12, (float) w);
+
+        verticesPointer += 16;
+        return this;
+    }
+
+    /**
+     * Writes a color packed as 0xAARRGGBB.
+     */
+    public MeshBuilder argb(int argb) {
+        debugVertexBufferCapacity();
+
+        long p = verticesPointer;
+
+        memPutByte(p, (byte) (argb >> 16));
+        memPutByte(p + 1, (byte) (argb >> 8));
+        memPutByte(p + 2, (byte) argb);
+        memPutByte(p + 3, (byte) (((argb >>> 24) & 0xFF) * (float) alpha));
+
+        verticesPointer += 4;
+        return this;
+    }
+
     public MeshBuilder color(Color c) {
         debugVertexBufferCapacity();
 

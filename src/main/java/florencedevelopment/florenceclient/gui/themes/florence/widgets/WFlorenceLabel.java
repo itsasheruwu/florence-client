@@ -16,8 +16,9 @@ public class WFlorenceLabel extends WLabel implements FlorenceWidget {
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-        if (!text.isEmpty()) {
-            renderer.text(text, x, y, color != null ? color : (title ? theme().titleTextColor.get() : theme().textColor.get()), title);
-        }
+        if (text.isEmpty()) return;
+
+        if (color != null) renderer.text(text, x, y, color, title);
+        else renderer.text(text, x, y, design().text, title);
     }
 }
