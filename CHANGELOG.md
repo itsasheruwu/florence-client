@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Click GUI redesign: new rendering, new theme, new widgets and a search for everything.
+
+### Added
+
+- Rounded shapes, borders, soft shadows and frosted glass in the click GUI, drawn with a new signed distance field shader so edges stay smooth at any scale.
+- Glass windows that show the blurred world behind them. The blur is now shared with the `Blur` module instead of being tied to it.
+- New Legit tab next to Modules: a Lunar Client style menu with a category sidebar and a grid of cards, each with a custom icon, an Options button and an Enabled / Disabled bar. Options open as a page in the same window. The modules in it are not in the Modules tab, and the Edit button changes which ones they are.
+- Inline color picker with a saturation and brightness square, hue and opacity strips and a rainbow switch, replacing the separate color window.
+- Right-clicking a HUD element in the editor opens a floating panel with its settings, and right-clicking empty space opens a small menu (a reusable `ContextMenu`).
+- New `Window Width` GUI setting for the module windows.
+- Command palette opened with `Ctrl + K` (or the Search button in the top bar) to find modules, settings and tabs with fuzzy matching, highlighted letters and full keyboard control.
+- Notifications that slide in at the top right when a module is turned on or off or bound to a key from the GUI. Other code can show one with `NotificationManager.push`.
+- Animated on/off switches, a sliding tab highlight, a count badge on every category window and a marker on modules whose settings have been changed.
+- New GUI settings: preset (Florence Dark, Midnight, Light, High Contrast, Enderstorm), accent colors, density, working corner radius, glass, blur strength, panel opacity, shadows, animation speed and reduced motion.
+- New events for the GUI: `GuiScreenEvent` (opened, closing, closed), `GuiThemeChangedEvent`, `SettingChangedEvent`, `ModuleToggledEvent`, `ModuleFavoriteChangedEvent` and `NotificationEvent`.
+- Animation engine for the GUI with easing curves, frame rate independent springs and motion settings that apply everywhere.
+- Unit tests (JUnit 5) for the animation engine, colors, design tokens, fuzzy search and theme migration.
+
+### Changed
+
+- Rebuilt every widget of the Florence theme: modules, windows, buttons, switches, sliders, dropdowns, text boxes, tooltips, sections, scroll bars and separators.
+- Module settings are only built the first time a module is opened, and they fit inside the width of the window.
+- Module search uses fuzzy matching and only lists real matches instead of always filling the list.
+- Replaced Meteor with Florence in the GUI-facing texts of the config, HUD and Blur module (the Blur `meteor` option is now `florence`).
+- The theme is now called `Florence`. Settings saved under the old `Meteor` name are still picked up.
+- The GUI animates in real time, so the Timer module no longer speeds it up or slows it down.
+- The `Blur` module now asks the shared blur for the world behind the GUI.
+
+### Fixed
+
+- Click GUI windows were twice as wide as intended when the GUI scale was not 1.
+- Clicking a module window no longer moves it to the end of the layout.
+- Category icons no longer show through the windows in front of them.
+- Windows that overlap no longer show the text of the windows below them through their own.
+- The `Render2DEvent` screen height was the screen width.
+
+### Notes
+
+- Developers can set `FLORENCE_DEV_OPEN_GUI` (and optionally `world`) in a development environment to open the click GUI by itself, see `DevAutoOpen`.
+
 ## [v1.21.11-3] - 2026-03-10
 
 Interface and movement update focused on the Florence click GUI, combat helpers, and strafe tuning.

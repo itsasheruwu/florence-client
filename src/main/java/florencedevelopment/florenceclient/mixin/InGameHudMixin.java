@@ -39,7 +39,7 @@ public abstract class InGameHudMixin {
 
         Utils.unscaledProjection();
 
-        FlorenceClient.EVENT_BUS.post(Render2DEvent.get(context, context.getScaledWindowWidth(), context.getScaledWindowWidth(), tickCounter.getTickProgress(true)));
+        FlorenceClient.EVENT_BUS.post(Render2DEvent.get(context, context.getScaledWindowWidth(), context.getScaledWindowHeight(), tickCounter.getTickProgress(true)));
 
         context.createNewRootLayer();
         Utils.scaledProjection();

@@ -5,78 +5,75 @@
 
 package florencedevelopment.florenceclient.gui.themes.florence;
 
+import florencedevelopment.florenceclient.gui.animation.Interaction;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.design.Design;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
 import florencedevelopment.florenceclient.gui.utils.BaseWidget;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
-import florencedevelopment.florenceclient.utils.render.color.Color;
 
 public interface FlorenceWidget extends BaseWidget {
     default FlorenceGuiTheme theme() {
         return (FlorenceGuiTheme) getTheme();
     }
 
-    default void renderBackground(GuiRenderer renderer, WWidget widget, Color outlineColor, Color backgroundColor) {
-        FlorenceGuiTheme theme = theme();
-        double s = theme.scale(2);
-        double radius = theme.roundedCorners() ? theme.cornerRadius() : 0;
-
-        // Render shadow if enabled
-        if (theme.enableShadows() && radius > 0) {
-            Color shadowColor = new Color(0, 0, 0, 80);
-            renderer.quad(widget.x + 2, widget.y + 2, widget.width, widget.height, shadowColor);
-        }
-
-        // Render main background with rounded corners simulation
-        if (radius > 0) {
-            // For now, use regular quads but with better spacing
-            // In a full implementation, you'd use actual rounded rectangle rendering
-            renderer.quad(widget.x + s, widget.y + s, widget.width - s * 2, widget.height - s * 2, backgroundColor);
-        } else {
-            renderer.quad(widget.x + s, widget.y + s, widget.width - s * 2, widget.height - s * 2, backgroundColor);
-        }
-
-        // Render outline with gradient effect
-        Color outlineTop = outlineColor;
-        Color outlineBottom = new Color(outlineColor.r, outlineColor.g, outlineColor.b, (int)(outlineColor.a * 0.7));
-        
-        renderer.quad(widget.x, widget.y, widget.width, s, outlineTop);
-        renderer.quad(widget.x, widget.y + widget.height - s, widget.width, s, outlineBottom);
-        renderer.quad(widget.x, widget.y + s, s, widget.height - s * 2, outlineTop);
-        renderer.quad(widget.x + widget.width - s, widget.y + s, s, widget.height - s * 2, outlineTop);
+    default Design design() {
+        return theme().design();
     }
 
-    default void renderBackground(GuiRenderer renderer, WWidget widget, boolean pressed, boolean mouseOver) {
-        FlorenceGuiTheme theme = theme();
-        Color bgColor = theme.backgroundColor.get(pressed, mouseOver);
-        Color outlineColor = theme.outlineColor.get(pressed, mouseOver);
-        
-        // Add glass effect on hover
-        if (mouseOver && !pressed && theme.enableShadows()) {
-            Color glassColor = theme.glassEffectColor();
-            renderer.quad(widget.x, widget.y, widget.width, widget.height, glassColor);
-        }
-        
-        renderBackground(renderer, widget, outlineColor, bgColor);
+    /**
+     * Width of the thin lines around controls.
+     */
+    default double lineWidth() {
+        return Math.max(1, Math.round(theme().scale(1)));
     }
 
-    default void renderRoundedBackground(GuiRenderer renderer, WWidget widget, Color backgroundColor, Color outlineColor) {
+    /**
+     * Draws the background and outline shared by buttons and other things that can be clicked: it brightens when the
+     * mouse is over, gets the accent color when pressed.
+     */
+    default void renderControl(GuiRenderer renderer, WWidget widget, Interaction ui) {
+        Design d = design();
         FlorenceGuiTheme theme = theme();
-        double radius = theme.roundedCorners() ? theme.cornerRadius() : 0;
-        double s = theme.scale(2);
 
-        // Shadow
-        if (theme.enableShadows() && radius > 0) {
-            Color shadowColor = new Color(0, 0, 0, 60);
-            renderer.quad(widget.x + 1, widget.y + 1, widget.width, widget.height, shadowColor);
-        }
+        int fill = Colors.lerp(d.field, d.fieldHover, ui.hover());
+        fill = Colors.lerp(fill, Colors.withAlpha(d.accent, 210), ui.press());
 
-        // Background
-        renderer.quad(widget.x + s, widget.y + s, widget.width - s * 2, widget.height - s * 2, backgroundColor);
-        
-        // Outline
-        renderer.quad(widget.x, widget.y, widget.width, s, outlineColor);
-        renderer.quad(widget.x, widget.y + widget.height - s, widget.width, s, outlineColor);
-        renderer.quad(widget.x, widget.y + s, s, widget.height - s * 2, outlineColor);
-        renderer.quad(widget.x + widget.width - s, widget.y + s, s, widget.height - s * 2, outlineColor);
+        int border = Colors.lerp(d.outline, Colors.withAlpha(d.accent, 170), ui.hover());
+
+        renderer.roundRect(widget.x, widget.y, widget.width, widget.height, theme.radiusMedium(), fill, lineWidth(), border);
+    }
+
+    /**
+     * Draws a chevron. At a rotation of 0 it points down, positive angles turn it clockwise.
+     *
+     * @param size width of the chevron
+     */
+    default void chevron(GuiRenderer renderer, double centerX, double centerY, double size, double rotation, double thickness, int color) {
+        double rad = Math.toRadians(rotation);
+        double cos = Math.cos(rad);
+        double sin = Math.sin(rad);
+
+        double hw = size / 2;
+        double hh = size / 4;
+
+        // Left end, tip and right end of a chevron pointing down
+        double lx = centerX + (-hw) * cos - (-hh) * sin;
+        double ly = centerY + (-hw) * sin + (-hh) * cos;
+        double tx = centerX - hh * sin;
+        double ty = centerY + hh * cos;
+        double rx = centerX + hw * cos - (-hh) * sin;
+        double ry = centerY + hw * sin + (-hh) * cos;
+
+        renderer.line(lx, ly, tx, ty, thickness, color);
+        renderer.line(tx, ty, rx, ry, thickness, color);
+    }
+
+    /**
+     * The color text on a control should have: brighter on hover, readable on the accent when pressed.
+     */
+    default int controlTextColor(Interaction ui) {
+        Design d = design();
+        return Colors.lerp(d.text, d.textOnAccent, ui.press());
     }
 }

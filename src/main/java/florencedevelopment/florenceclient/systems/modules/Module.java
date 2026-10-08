@@ -8,6 +8,8 @@ package florencedevelopment.florenceclient.systems.modules;
 import florencedevelopment.florenceclient.FlorenceClient;
 import florencedevelopment.florenceclient.addons.AddonManager;
 import florencedevelopment.florenceclient.addons.FlorenceAddon;
+import florencedevelopment.florenceclient.events.gui.ModuleFavoriteChangedEvent;
+import florencedevelopment.florenceclient.events.gui.ModuleToggledEvent;
 import florencedevelopment.florenceclient.gui.GuiTheme;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
 import florencedevelopment.florenceclient.settings.Settings;
@@ -50,12 +52,19 @@ public abstract class Module implements ISerializable<Module>, Comparable<Module
     public boolean chatFeedback = true;
     public boolean favorite = false;
 
+    // Whether the module is shown in the Legit tab of the GUI instead of the Modules tab
+    public boolean legit;
+
+    // When the module was last turned on or off (System.nanoTime), 0 if it hasn't been since the client started
+    public long lastToggleNanos;
+
     public Module(Category category, String name, String description, String... aliases) {
         if (name.contains(" ")) FlorenceClient.LOG.warn("Module '{}' contains invalid characters in its name making it incompatible with Florence Client commands.", name);
 
         this.mc = MinecraftClient.getInstance();
         this.category = category;
         this.name = name;
+        this.legit = LegitModules.isDefault(name);
         this.title = Utils.nameToTitle(name);
         this.description = description;
         this.aliases = aliases;
@@ -94,6 +103,8 @@ public abstract class Module implements ISerializable<Module>, Comparable<Module
                 if (autoSubscribe) FlorenceClient.EVENT_BUS.subscribe(this);
                 onActivate();
             }
+
+            postToggled();
         }
         else {
             if (runInMainMenu || Utils.canUpdate()) {
@@ -103,7 +114,21 @@ public abstract class Module implements ISerializable<Module>, Comparable<Module
 
             active = false;
             Modules.get().removeActive(this);
+
+            postToggled();
         }
+    }
+
+    private void postToggled() {
+        lastToggleNanos = System.nanoTime();
+        FlorenceClient.EVENT_BUS.post(ModuleToggledEvent.get(this, active, lastToggleNanos));
+    }
+
+    public void setFavorite(boolean favorite) {
+        if (this.favorite == favorite) return;
+
+        this.favorite = favorite;
+        FlorenceClient.EVENT_BUS.post(ModuleFavoriteChangedEvent.get(this, favorite));
     }
 
     public void enable() {
@@ -159,6 +184,7 @@ public abstract class Module implements ISerializable<Module>, Comparable<Module
         tag.putBoolean("toggleOnKeyRelease", toggleOnBindRelease);
         tag.putBoolean("chatFeedback", chatFeedback);
         tag.putBoolean("favorite", favorite);
+        tag.putBoolean("legit", legit);
         tag.put("settings", settings.toTag());
         tag.putBoolean("active", active);
 
@@ -172,6 +198,7 @@ public abstract class Module implements ISerializable<Module>, Comparable<Module
         toggleOnBindRelease = tag.getBoolean("toggleOnKeyRelease", false);
         chatFeedback = !tag.contains("chatFeedback") || tag.getBoolean("chatFeedback", false);
         favorite = tag.getBoolean("favorite", false);
+        if (tag.contains("legit")) legit = tag.getBoolean("legit", legit);
 
         // Settings
         NbtElement settingsTag = tag.get("settings");

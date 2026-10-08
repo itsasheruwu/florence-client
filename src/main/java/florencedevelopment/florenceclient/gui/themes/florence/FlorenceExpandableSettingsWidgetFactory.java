@@ -39,7 +39,7 @@ import static florencedevelopment.florenceclient.FlorenceClient.mc;
 public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidgetFactory {
     private static final SettingColor WHITE = new SettingColor();
     private static final String DEFAULT_GROUP_NAME = "General";
-    private static final double NUMERIC_EDIT_MIN_WIDTH = 320;
+    private static final double NUMERIC_EDIT_MIN_WIDTH = 0;
 
     public FlorenceExpandableSettingsWidgetFactory(GuiTheme theme) {
         super(theme);
@@ -122,8 +122,8 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
             table = list.add(theme.table()).expandX().widget();
         }
         // Reduce table spacing for compact layout
-        table.verticalSpacing = 1.5; // vs 3 default
-        table.horizontalSpacing = 2; // vs 3 default
+        table.verticalSpacing = 5;
+        table.horizontalSpacing = 8;
 
         RemoveInfo removeInfo = null;
 
@@ -178,7 +178,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
     // Settings without reset buttons
 
     private void boolWNoReset(WTable table, BoolSetting setting) {
-        WCheckbox checkbox = table.add(theme.checkbox(setting.get())).expandCellX().widget();
+        WCheckbox checkbox = table.add(theme.toggle(setting.get())).expandCellX().right().widget();
         checkbox.action = () -> setting.set(checkbox.checked);
         // No reset button
     }
@@ -242,12 +242,7 @@ public class FlorenceExpandableSettingsWidgetFactory extends DefaultSettingsWidg
     }
 
     private void colorWNoReset(WTable table, ColorSetting setting) {
-        WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
-
-        WQuad quad = list.add(theme.quad(setting.get())).widget();
-
-        WButton edit = list.add(theme.button(GuiRenderer.EDIT)).widget();
-        edit.action = () -> mc.setScreen(new ColorSettingScreen(theme, setting));
+        table.add(new florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceColorEdit(setting)).expandX();
         // No reset button
     }
 

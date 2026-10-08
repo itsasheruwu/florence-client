@@ -6,6 +6,7 @@
 package florencedevelopment.florenceclient.gui;
 
 import florencedevelopment.florenceclient.FlorenceClient;
+import florencedevelopment.florenceclient.events.gui.GuiThemeChangedEvent;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.utils.PostInit;
 import florencedevelopment.florenceclient.utils.PreInit;
@@ -46,7 +47,7 @@ public class GuiThemes {
             }
         }
 
-        if (theme == null) select("Meteor");
+        if (theme == null) select("Florence");
     }
 
     public static void add(GuiTheme theme) {
@@ -64,6 +65,9 @@ public class GuiThemes {
     }
 
     public static void select(String name) {
+        // Themes that have been renamed are still selected by their old name in saved configs
+        name = ThemeFiles.currentName(name);
+
         // Find theme with the provided name
         GuiTheme theme = null;
 
@@ -83,7 +87,7 @@ public class GuiThemes {
 
             // Load new theme
             try {
-                File file = new File(THEMES_FOLDER, get().name + ".nbt");
+                File file = ThemeFiles.resolve(THEMES_FOLDER, get().name);
 
                 if (file.exists()) {
                     NbtCompound tag = NbtIo.read(file.toPath());
@@ -95,6 +99,8 @@ public class GuiThemes {
 
             // Save global gui settings with the new theme
             saveGlobal();
+
+            FlorenceClient.EVENT_BUS.post(GuiThemeChangedEvent.get(get()));
         }
     }
 

@@ -6,6 +6,7 @@
 package florencedevelopment.florenceclient.gui.themes.florence.widgets;
 
 import florencedevelopment.florenceclient.gui.WidgetScreen;
+import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceWidget;
 import florencedevelopment.florenceclient.gui.widgets.WAccount;
 import florencedevelopment.florenceclient.systems.accounts.Account;
@@ -18,11 +19,11 @@ public class WFlorenceAccount extends WAccount implements FlorenceWidget {
 
     @Override
     protected Color loggedInColor() {
-        return theme().loggedInColor.get();
+        return FlorenceGuiTheme.toColor(design().success);
     }
 
     @Override
     protected Color accountTypeColor() {
-        return theme().textSecondaryColor.get();
+        return FlorenceGuiTheme.toColor(design().textSecondary);
     }
 }

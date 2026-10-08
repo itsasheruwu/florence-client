@@ -6,6 +6,8 @@
 package florencedevelopment.florenceclient.gui.screens;
 
 import florencedevelopment.florenceclient.gui.GuiTheme;
+import florencedevelopment.florenceclient.gui.widgets.WItem;
+import florencedevelopment.florenceclient.gui.design.CategoryColors;
 import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
 import florencedevelopment.florenceclient.gui.tabs.TabScreen;
 import florencedevelopment.florenceclient.gui.tabs.Tabs;
@@ -16,7 +18,7 @@ import florencedevelopment.florenceclient.gui.widgets.containers.WVerticalList;
 import florencedevelopment.florenceclient.gui.widgets.containers.WWindow;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
 import florencedevelopment.florenceclient.gui.widgets.input.WTextBox;
-import florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceExpandableModule;
+import florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceModule;
 import florencedevelopment.florenceclient.systems.config.Config;
 import florencedevelopment.florenceclient.systems.modules.Category;
 import florencedevelopment.florenceclient.systems.modules.Module;
@@ -99,6 +101,27 @@ public class ModulesScreen extends TabScreen {
         renderer.render();
     }
 
+    private void addIcon(WContainer container, WWindow window, net.minecraft.item.ItemStack stack) {
+        WItem item = theme.item(stack);
+        item.hidden = () -> isCovered(window, item);
+        container.add(item).pad(2);
+    }
+
+    // The game draws items above everything, so an icon is left out while a window that is in front of its own covers it
+    private boolean isCovered(WWindow window, WItem item) {
+        if (controller == null) return false;
+
+        int index = controller.windows.indexOf(window);
+
+        for (int i = index + 1; i < controller.windows.size(); i++) {
+            WWindow other = controller.windows.get(i);
+
+            if (other.visible && item.x < other.x + other.width && item.x + item.width > other.x && item.y < other.y + other.height && item.y + item.height > other.y) return true;
+        }
+
+        return false;
+    }
+
     // Category
 
     protected WWindow createCategory(WContainer c, Category category, List<Module> moduleList) {
@@ -106,13 +129,15 @@ public class ModulesScreen extends TabScreen {
         w.id = category.name;
         w.padding = 0;
         w.spacing = 0;
+        w.badge = String.valueOf(moduleList.size());
+        w.accent = CategoryColors.of(category.name);
         
-        // Set a reasonable minimum width (240px equivalent from HTML example)
-        // But allow it to grow if content needs more space
-        w.minWidth = theme.scale(240);
+        // Set a reasonable minimum width, but allow it to grow if content needs more space.
+        // minWidth is in unscaled units, WWindow applies the theme scale itself.
+        w.minWidth = theme.windowWidth();
 
         if (theme.categoryIcons()) {
-            w.beforeHeaderInit = wContainer -> wContainer.add(theme.item(category.icon)).pad(2);
+            w.beforeHeaderInit = wContainer -> addIcon(wContainer, w, category.icon);
         }
 
         c.add(w);
@@ -167,10 +192,10 @@ public class ModulesScreen extends TabScreen {
         WWindow w = theme.window("Search");
         w.id = "search";
         w.fixedWidth = 320;
-        w.minWidth = theme.scale(320);
+        w.minWidth = 320;
 
         if (theme.categoryIcons()) {
-            w.beforeHeaderInit = wContainer -> wContainer.add(theme.item(Items.COMPASS.getDefaultStack())).pad(2);
+            w.beforeHeaderInit = wContainer -> addIcon(wContainer, w, Items.COMPASS.getDefaultStack());
         }
 
         c.add(w);
@@ -200,10 +225,10 @@ public class ModulesScreen extends TabScreen {
         w.id = "favorites";
         w.padding = 0;
         w.spacing = 0;
-        w.minWidth = theme.scale(240);
+        w.minWidth = theme.windowWidth();
 
         if (theme.categoryIcons()) {
-            w.beforeHeaderInit = wContainer -> wContainer.add(theme.item(Items.NETHER_STAR.getDefaultStack())).pad(2);
+            w.beforeHeaderInit = wContainer -> addIcon(wContainer, w, Items.NETHER_STAR.getDefaultStack());
         }
 
         Cell<WWindow> cell = c.add(w);
@@ -271,9 +296,32 @@ public class ModulesScreen extends TabScreen {
         }
     }
     
+    /**
+     * Shows the settings of a module, if its card is on the screen.
+     */
+    public void expandModule(Module module) {
+        if (controller == null) return;
+
+        for (WWindow window : controller.windows) {
+            expandWidgets(window, module);
+        }
+    }
+
+    private void expandWidgets(WWidget widget, Module module) {
+        if (widget instanceof WFlorenceModule card && card.getModule() == module) {
+            card.setExpanded(true);
+        }
+
+        if (widget instanceof WContainer container) {
+            for (var cell : container.cells) {
+                expandWidgets(cell.widget(), module);
+            }
+        }
+    }
+
     private void tickWidgets(WWidget widget) {
-        if (widget instanceof WFlorenceExpandableModule) {
-            ((WFlorenceExpandableModule) widget).tick();
+        if (widget instanceof WFlorenceModule) {
+            ((WFlorenceModule) widget).tick();
         }
         if (widget instanceof WContainer) {
             for (var cell : ((WContainer) widget).cells) {
@@ -295,7 +343,7 @@ public class ModulesScreen extends TabScreen {
             List<Module> moduleList = new ArrayList<>();
             for (Category category : Modules.loopCategories()) {
                 for (Module module : Modules.get().getGroup(category)) {
-                    if (!Config.get().hiddenModules.get().contains(module)) {
+                    if (!module.legit && !Config.get().hiddenModules.get().contains(module)) {
                         moduleList.add(module);
                     }
                 }
@@ -324,6 +372,20 @@ public class ModulesScreen extends TabScreen {
             createFavoritesW(favorites.widget());
         }
 
+        // The order windows are laid out in. Clicking a window brings it to the front by moving its cell to the end of the
+        // cells, which must not move the window to the end of the layout too.
+        private final List<Cell<?>> layoutOrder = new ArrayList<>();
+
+        private List<Cell<?>> layoutOrder() {
+            layoutOrder.removeIf(cell -> !cells.contains(cell));
+
+            for (Cell<?> cell : cells) {
+                if (!layoutOrder.contains(cell)) layoutOrder.add(cell);
+            }
+
+            return layoutOrder;
+        }
+
         @Override
         protected void onCalculateWidgetPositions() {
             double pad = theme.scale(4);
@@ -331,7 +393,7 @@ public class ModulesScreen extends TabScreen {
             double y = this.y;
             double rowHeight = 0;
 
-            for (Cell<?> cell : cells) {
+            for (Cell<?> cell : layoutOrder()) {
                 double windowWidth = getWindowWidth();
                 double windowHeight = getWindowHeight();
 

@@ -11,6 +11,9 @@ import net.minecraft.item.ItemStack;
 public class WItem extends WWidget {
     protected ItemStack itemStack;
 
+    /** Items are drawn by the game on top of everything else, this hides the item while something covers it. */
+    public java.util.function.BooleanSupplier hidden;
+
     public WItem(ItemStack itemStack) {
         this.itemStack = itemStack;
     }
@@ -25,7 +28,7 @@ public class WItem extends WWidget {
 
     @Override
     protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
-        if (!itemStack.isEmpty()) {
+        if (!itemStack.isEmpty() && (hidden == null || !hidden.getAsBoolean())) {
             renderer.post(() -> {
                 double s = theme.scale(2);
                 renderer.item(itemStack, (int) x, (int) y, (float) s, true);

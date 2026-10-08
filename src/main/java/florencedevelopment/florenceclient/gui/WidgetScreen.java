@@ -6,14 +6,20 @@
 package florencedevelopment.florenceclient.gui;
 
 import florencedevelopment.florenceclient.FlorenceClient;
+import florencedevelopment.florenceclient.events.gui.GuiScreenEvent;
+import florencedevelopment.florenceclient.gui.animation.Easing;
+import florencedevelopment.florenceclient.gui.animation.Motion;
+import florencedevelopment.florenceclient.gui.notifications.NotificationManager;
 import florencedevelopment.florenceclient.gui.renderer.GuiDebugRenderer;
 import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
+import florencedevelopment.florenceclient.gui.screens.palette.CommandPaletteScreen;
 import florencedevelopment.florenceclient.gui.tabs.TabScreen;
 import florencedevelopment.florenceclient.gui.utils.Cell;
 import florencedevelopment.florenceclient.gui.widgets.WRoot;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
 import florencedevelopment.florenceclient.gui.widgets.containers.WContainer;
 import florencedevelopment.florenceclient.gui.widgets.input.WTextBox;
+import florencedevelopment.florenceclient.renderer.BackdropBlur;
 import florencedevelopment.florenceclient.utils.Utils;
 import florencedevelopment.florenceclient.utils.misc.CursorStyle;
 import florencedevelopment.florenceclient.utils.misc.input.Input;
@@ -40,6 +46,9 @@ import static org.lwjgl.glfw.GLFW.*;
 public abstract class WidgetScreen extends Screen {
     private static final GuiRenderer RENDERER = new GuiRenderer();
     private static final GuiDebugRenderer DEBUG_RENDERER = new GuiDebugRenderer();
+
+    // Longest frame (in seconds) the GUI animates over, so a stall doesn't snap every animation to its end
+    private static final double MAX_FRAME_TIME = 0.1;
 
     public Runnable taskAfterRender;
     protected Runnable enterAction;
@@ -100,9 +109,14 @@ public abstract class WidgetScreen extends Screen {
 
         closed = false;
 
+        // The blur has to be requested before the world is rendered, ask now so the first frame already has it
+        BackdropBlur.get().request(theme.backdropBlurLevel(), false);
+
         if (firstInit) {
             firstInit = false;
             initWidgets();
+
+            FlorenceClient.EVENT_BUS.post(GuiScreenEvent.Opened.get(this));
         }
     }
 
@@ -192,6 +206,14 @@ public abstract class WidgetScreen extends Screen {
     public boolean keyPressed(KeyInput input) {
         if (locked) return false;
 
+        // Ctrl + K opens the search from anywhere in the GUI, even while typing in a text box
+        boolean commandKey = MacWindowUtil.IS_MAC ? input.modifiers() == GLFW_MOD_SUPER : input.modifiers() == GLFW_MOD_CONTROL;
+
+        if (commandKey && input.key() == GLFW_KEY_K && canOpenPalette()) {
+            mc.setScreen(new CommandPaletteScreen(theme));
+            return true;
+        }
+
         boolean shouldReturn = root.keyPressed(input) || super.keyPressed(input);
         if (shouldReturn) return true;
 
@@ -233,6 +255,14 @@ public abstract class WidgetScreen extends Screen {
             || (control && input.key() == GLFW_KEY_V && fromClipboard());
     }
 
+    /**
+     * Whether Ctrl + K opens the search on this screen. The search itself and screens that are in the middle of
+     * something, like asking for a keybind, say no.
+     */
+    protected boolean canOpenPalette() {
+        return true;
+    }
+
     public void keyRepeated(KeyInput input) {
         if (locked) return;
 
@@ -253,12 +283,21 @@ public abstract class WidgetScreen extends Screen {
         }
     }
 
-    public void renderCustom(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderCustom(DrawContext context, int mouseX, int mouseY) {
+        // Animate in real time, the render tick counter delta is scaled by the Timer module.
+        // Widgets and onRenderBefore expect this value in ticks (1 tick = 1/20 s).
+        float delta = (float) (MathHelper.clamp(Utils.frameTime, 0, MAX_FRAME_TIME) * 20);
+
         int s = mc.getWindow().getScaleFactor();
         mouseX *= s;
         mouseY *= s;
 
-        animProgress += (delta / 20 * 14) * (closing ? -1 : 1);
+        // Fades in and out, a little quicker on the way out
+        double fadeSeconds = Motion.duration(closing ? 0.12 : 0.18);
+
+        if (fadeSeconds <= 0) animProgress = closing ? 0 : 1;
+        else animProgress += (delta / 20 / fadeSeconds) * (closing ? -1 : 1);
+
         animProgress = MathHelper.clamp(animProgress, 0, 1);
 
         if (closing && (animProgress == 0 || parent != null)) {
@@ -266,6 +305,9 @@ public abstract class WidgetScreen extends Screen {
         }
 
         GuiKeyEvents.canUseKeys = true;
+
+        // Keep the blur going for the next frame
+        BackdropBlur.get().request(theme.backdropBlurLevel(), false);
 
         // Apply projection without scaling
         Utils.unscaledProjection();
@@ -276,9 +318,15 @@ public abstract class WidgetScreen extends Screen {
         theme.beforeRender();
 
         RENDERER.begin(context);
-        RENDERER.setAlpha(animProgress);
+        RENDERER.setAlpha(Easing.STANDARD.apply(animProgress));
         root.render(RENDERER, mouseX, mouseY, delta / 20);
         RENDERER.setAlpha(1);
+        RENDERER.end();
+
+        // Notifications are on top of everything but tooltips
+        RENDERER.begin(context);
+        onRenderOverlay(RENDERER, mouseX, mouseY, delta / 20);
+        NotificationManager.get().render(RENDERER, theme, delta / 20);
         RENDERER.end();
 
         boolean tooltip = RENDERER.renderTooltip(context, mouseX, mouseY, delta / 20);
@@ -302,6 +350,13 @@ public abstract class WidgetScreen extends Screen {
 
     protected void onRenderBefore(DrawContext drawContext, float delta) {}
 
+    /**
+     * Called after everything else is drawn, to draw things that are above it like menus.
+     *
+     * @param delta time since the last frame in seconds
+     */
+    protected void onRenderOverlay(GuiRenderer renderer, double mouseX, double mouseY, double delta) {}
+
     @Override
     public void resize(int width, int height) {
         super.resize(width, height);
@@ -311,6 +366,8 @@ public abstract class WidgetScreen extends Screen {
     @Override
     public void close() {
         if (!locked || lockedAllowClose) {
+            if (!closing) FlorenceClient.EVENT_BUS.post(GuiScreenEvent.Closing.get(this));
+
             closing = true;
         }
     }
@@ -320,6 +377,8 @@ public abstract class WidgetScreen extends Screen {
         if (!closed || lockedAllowClose) {
             closed = true;
             onClosed();
+
+            FlorenceClient.EVENT_BUS.post(GuiScreenEvent.Closed.get(this));
 
             Input.setCursorStyle(CursorStyle.Default);
 

@@ -41,7 +41,7 @@ public class ModuleScreen extends WindowScreen {
 
     public ModuleScreen(GuiTheme theme, Module module) {
         super(theme, theme.favorite(module.favorite), module.title);
-        ((WFavorite) window.icon).action = () -> module.favorite = ((WFavorite) window.icon).checked;
+        ((WFavorite) window.icon).action = () -> module.setFavorite(((WFavorite) window.icon).checked);
 
         this.module = module;
     }

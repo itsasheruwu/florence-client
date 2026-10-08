@@ -156,7 +156,7 @@ public class DefaultSettingsWidgetFactory extends SettingsWidgetFactory {
     // Settings
 
     private void boolW(WTable table, BoolSetting setting) {
-        WCheckbox checkbox = table.add(theme.checkbox(setting.get())).expandCellX().widget();
+        WCheckbox checkbox = table.add(theme.toggle(setting.get())).expandCellX().right().widget();
         checkbox.action = () -> setting.set(checkbox.checked);
 
         reset(table, setting, () -> checkbox.checked = setting.get());
@@ -224,6 +224,12 @@ public class DefaultSettingsWidgetFactory extends SettingsWidgetFactory {
     }
 
     private void colorW(WTable table, ColorSetting setting) {
+        if (theme instanceof florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme) {
+            table.add(new florencedevelopment.florenceclient.gui.themes.florence.widgets.WFlorenceColorEdit(setting)).expandX();
+            reset(table, setting, () -> {});
+            return;
+        }
+
         WHorizontalList list = table.add(theme.horizontalList()).expandX().widget();
 
         WQuad quad = list.add(theme.quad(setting.get())).widget();

@@ -24,5 +24,15 @@ public abstract class FlorenceVertexFormats {
         .add("Color", VertexFormatElement.COLOR)
         .build();
 
+    // Rounded shapes drawn with a signed distance field, see shaders/ui_shape.frag
+    public static final VertexFormat POS2_SHAPE = VertexFormat.builder()
+        .add("Position", FlorenceVertexFormatElements.POS2)
+        .add("Local", VertexFormatElement.UV)
+        .add("ShapeA", FlorenceVertexFormatElements.SHAPE_A)
+        .add("ShapeB", FlorenceVertexFormatElements.SHAPE_B)
+        .add("Color", VertexFormatElement.COLOR)
+        .add("Color2", FlorenceVertexFormatElements.COLOR2)
+        .build();
+
     private FlorenceVertexFormats() {}
 }

@@ -29,6 +29,18 @@ import java.util.List;
 
 import static florencedevelopment.florenceclient.FlorenceClient.mc;
 
+import florencedevelopment.florenceclient.gui.renderer.GuiRenderer;
+import florencedevelopment.florenceclient.gui.design.Colors;
+import florencedevelopment.florenceclient.gui.themes.florence.FlorenceGuiTheme;
+import florencedevelopment.florenceclient.gui.widgets.WWidget;
+import florencedevelopment.florenceclient.gui.widgets.containers.WContainer;
+import florencedevelopment.florenceclient.gui.widgets.containers.WHorizontalList;
+import florencedevelopment.florenceclient.gui.widgets.containers.WVerticalList;
+import florencedevelopment.florenceclient.gui.widgets.containers.WView;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WCheckbox;
+import florencedevelopment.florenceclient.gui.widgets.pressable.WMinus;
+import florencedevelopment.florenceclient.settings.Settings;
+
 public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
     private static final Color SPLIT_LINES_COLOR = new Color(255, 255, 255, 75);
 
@@ -52,6 +64,15 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
     private int clickX, clickY;
     private final List<HudElement> selection = new ArrayList<>();
     private boolean moved, dragging;
+
+    private final florencedevelopment.florenceclient.gui.menu.ContextMenu menu = new florencedevelopment.florenceclient.gui.menu.ContextMenu();
+    private boolean ignoreRelease;
+
+    // The settings of an element, shown in a panel at the mouse
+    private WHudPanel panel;
+    private HudElement panelElement;
+    private Settings anchorSettings;
+    private WContainer settingsC1, settingsC2;
     private HudElement addedHoveredToSelectionWhenClickedElement;
 
     private double splitLinesAnimation;
@@ -76,6 +97,23 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
         mouseX *= s;
         mouseY *= s;
 
+        if (panel != null) {
+            if (!panel.isOver(mouseX, mouseY)) {
+                closePanel();
+                ignoreRelease = true;
+                return true;
+            }
+
+            return super.mouseClicked(click, doubled);
+        }
+
+        // While the menu is open it gets the click, whatever it is
+        if (menu.isOpen()) {
+            menu.click(mouseX, mouseY, click.button());
+            ignoreRelease = true;
+            return true;
+        }
+
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             pressed = true;
             selectionSnapBox = null;
@@ -98,8 +136,147 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
         return false;
     }
 
+    private void openPanel(HudElement element, int x, int y) {
+        menu.close();
+        closePanel();
+
+        panelElement = element;
+        anchorSettings = HudElementScreen.createAnchorSettings(element);
+
+        panel = add(new WHudPanel(x, y)).widget();
+        panel.minWidth = 360;
+    }
+
+    private void closePanel() {
+        if (panel == null) return;
+
+        panel = null;
+        panelElement = null;
+        settingsC1 = settingsC2 = null;
+        clear();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        if (panel != null) {
+            if (settingsC1 != null) panelElement.settings.tick(settingsC1, theme);
+            if (settingsC2 != null) anchorSettings.tick(settingsC2, theme);
+        }
+    }
+
+    private class WHudPanel extends WVerticalList {
+        private final int px, py;
+
+        WHudPanel(int px, int py) {
+            this.px = px;
+            this.py = py;
+        }
+
+        @Override
+        public void init() {
+            spacing = 6;
+
+            HudElement element = panelElement;
+
+            WHorizontalList head = add(theme.horizontalList()).expandX().widget();
+            head.add(theme.label(element.info.title, true)).expandCellX().centerY();
+
+            WCheckbox active = head.add(theme.toggle(element.isActive())).centerY().widget();
+            active.action = () -> {
+                if (element.isActive() != active.checked) element.toggle();
+            };
+
+            WMinus remove = head.add(theme.minus()).centerY().widget();
+            remove.action = () -> taskAfterRender = () -> {
+                selection.remove(element);
+                closePanel();
+                element.remove();
+            };
+
+            add(theme.horizontalSeparator()).expandX();
+
+            WView view = add(theme.view()).expandX().widget();
+            view.maxHeight = florencedevelopment.florenceclient.utils.Utils.getWindowHeight() * 0.55;
+
+            view.add(theme.label(element.info.description, theme.scale(340))).expandX();
+
+            if (element.settings.sizeGroups() > 0) {
+                element.settings.onActivated();
+
+                settingsC1 = view.add(theme.verticalList()).expandX().widget();
+                settingsC1.add(theme.settings(element.settings)).expandX();
+            }
+
+            anchorSettings.onActivated();
+
+            settingsC2 = view.add(theme.verticalList()).expandX().widget();
+            settingsC2.add(theme.settings(anchorSettings)).expandX();
+
+            WWidget custom = element.getWidget(theme);
+
+            if (custom != null) {
+                view.add(theme.horizontalSeparator()).expandX();
+                view.add(custom).expandX();
+            }
+        }
+
+        @Override
+        protected void onCalculateWidgetPositions() {
+            double margin = theme.scale(8);
+
+            x = Math.max(margin, Math.min(px, florencedevelopment.florenceclient.utils.Utils.getWindowWidth() - width - margin));
+            y = Math.max(margin, Math.min(py, florencedevelopment.florenceclient.utils.Utils.getWindowHeight() - height - margin));
+
+            super.onCalculateWidgetPositions();
+        }
+
+        @Override
+        protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+            if (!(theme instanceof FlorenceGuiTheme florence)) {
+                renderer.quad(x, y, width, height, new florencedevelopment.florenceclient.utils.render.color.Color(20, 20, 24, 240));
+                return;
+            }
+
+            double radius = florence.radiusLarge();
+            double line = Math.max(1, Math.round(florence.scale(1)));
+
+            if (florence.shadows()) renderer.shadow(x, y + florence.scale(6), width, height, radius, florence.scale(26), florence.design().shadow);
+
+            if (florence.glass() && renderer.hasBackdrop()) renderer.glass(x, y, width, height, radius, florence.design().panel, line, florence.design().outlineHover);
+            else renderer.roundRect(x, y, width, height, radius, florence.design().panelSolid, line, florence.design().outlineHover);
+        }
+    }
+
+    private void openMenu(HudElement element, int x, int y) {
+        menu.clear();
+
+        if (element != null) {
+            menu.addToggle("Enabled", element::isActive, element::toggle)
+                .add("Settings", () -> mc.setScreen(new HudElementScreen(theme, element)))
+                .addSeparator()
+                .addDanger("Remove", () -> {
+                    selection.remove(element);
+                    element.remove();
+                });
+        }
+        else {
+            menu.add("Add element", () -> mc.setScreen(new AddHudElementScreen(theme, x, y)));
+        }
+
+        menu.open(x, y);
+    }
+
+    @Override
+    protected void onRenderOverlay(florencedevelopment.florenceclient.gui.renderer.GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+        menu.render(renderer, theme, mouseX, mouseY, delta);
+    }
+
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
+        if (panel != null) super.mouseMoved(mouseX, mouseY);
+
         double s = mc.getWindow().getScaleFactor();
 
         mouseX *= s;
@@ -118,6 +295,13 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
 
     @Override
     public boolean mouseReleased(Click click) {
+        if (ignoreRelease) {
+            ignoreRelease = false;
+            return false;
+        }
+
+        if (panel != null) return super.mouseReleased(click);
+
         double s = mc.getWindow().getScaleFactor();
 
         double mouseX = click.x();
@@ -144,8 +328,8 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
             else if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
                 HudElement hovered = getHovered((int) mouseX, (int) mouseY);
 
-                if (hovered != null) mc.setScreen(new HudElementScreen(theme, hovered));
-                else mc.setScreen(new AddHudElementScreen(theme, lastMouseX, lastMouseY));
+                if (hovered != null) openPanel(hovered, (int) mouseX, (int) mouseY);
+                else openMenu(null, (int) mouseX, (int) mouseY);
             }
         }
 
@@ -159,6 +343,13 @@ public class HudEditorScreen extends WidgetScreen implements Snapper.Container {
 
     @Override
     public boolean keyPressed(KeyInput input) {
+        if (panel != null) {
+            if (input.key() == GLFW.GLFW_KEY_ESCAPE) closePanel();
+            else super.keyPressed(input);
+
+            return true;
+        }
+
         if (!pressed) {
             if (input.key() == GLFW.GLFW_KEY_ENTER || input.key() == GLFW.GLFW_KEY_KP_ENTER) {
                 HudElement hovered = getHovered(lastMouseX, lastMouseY);

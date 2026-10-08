@@ -13,7 +13,12 @@ import florencedevelopment.florenceclient.gui.renderer.operations.TextOperation;
 import florencedevelopment.florenceclient.gui.renderer.packer.GuiTexture;
 import florencedevelopment.florenceclient.gui.renderer.packer.TexturePacker;
 import florencedevelopment.florenceclient.gui.widgets.WWidget;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import florencedevelopment.florenceclient.renderer.BackdropBlur;
 import florencedevelopment.florenceclient.renderer.Renderer2D;
+import florencedevelopment.florenceclient.renderer.ShapeRenderer;
 import florencedevelopment.florenceclient.renderer.Texture;
 import florencedevelopment.florenceclient.utils.PostInit;
 import florencedevelopment.florenceclient.utils.misc.Pool;
@@ -33,6 +38,9 @@ import static florencedevelopment.florenceclient.utils.Utils.getWindowWidth;
 public class GuiRenderer {
     private static final Color WHITE = new Color(255, 255, 255);
 
+    // The mesh copies the color straight away so one instance can be reused
+    private final Color scratchColor = new Color();
+
     private static final TexturePacker TEXTURE_PACKER = new TexturePacker();
     private static Texture TEXTURE;
 
@@ -47,6 +55,7 @@ public class GuiRenderer {
 
     private final Renderer2D r = new Renderer2D(false);
     private final Renderer2D rTex = new Renderer2D(true);
+    private final ShapeRenderer shapes = new ShapeRenderer();
 
     private final Pool<Scissor> scissorPool = new Pool<>(Scissor::new);
     private final Stack<Scissor> scissorStack = new ObjectArrayList<>();
@@ -104,6 +113,7 @@ public class GuiRenderer {
 
     public void beginRender() {
         r.begin();
+        shapes.begin();
         rTex.begin();
     }
 
@@ -115,9 +125,16 @@ public class GuiRenderer {
         if (scissor != null) scissor.push();
 
         r.end();
+        shapes.end();
         rTex.end();
 
+        // Plain quads, then rounded shapes, then icons and images. Text is drawn last.
         r.render();
+
+        GpuTextureView backdrop = BackdropBlur.get().getTexture();
+        if (backdrop != null) shapes.render(backdrop, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+        else shapes.render(TEXTURE.getGlTextureView(), TEXTURE.getSampler());
+
         rTex.render("u_Texture", TEXTURE.getGlTextureView(), TEXTURE.getSampler());
 
         // Normal text
@@ -211,6 +228,7 @@ public class GuiRenderer {
 
     public void setAlpha(double a) {
         r.setAlpha(a);
+        shapes.setAlpha(a);
         rTex.setAlpha(a);
 
         theme.textRenderer().setAlpha(a);
@@ -232,6 +250,75 @@ public class GuiRenderer {
     public void quad(WWidget widget, Color color) {
         quad(widget.x, widget.y, widget.width, widget.height, color);
     }
+
+    // Rounded shapes, colors are packed as 0xAARRGGBB (see Colors)
+
+    /**
+     * Whether the world behind the GUI is blurred this frame, so {@link #glass} shows it. Without it glass is drawn as
+     * a plain tinted box.
+     */
+    public boolean hasBackdrop() {
+        return BackdropBlur.get().getTexture() != null;
+    }
+
+    public void roundRect(double x, double y, double w, double h, double radius, int color) {
+        shapes.box(x, y, w, h, radius, radius, radius, radius, color, color, color, color, 0, 0);
+    }
+
+    public void roundRect(double x, double y, double w, double h, double radius, int color, double borderWidth, int borderColor) {
+        shapes.box(x, y, w, h, radius, radius, radius, radius, color, color, color, color, borderWidth, borderColor);
+    }
+
+    /**
+     * A box with a different radius for every corner.
+     */
+    public void roundRect(double x, double y, double w, double h, double rTopLeft, double rTopRight, double rBottomRight, double rBottomLeft, int color, double borderWidth, int borderColor) {
+        shapes.box(x, y, w, h, rTopLeft, rTopRight, rBottomRight, rBottomLeft, color, color, color, color, borderWidth, borderColor);
+    }
+
+    /**
+     * A box that fades from the top color to the bottom color.
+     */
+    public void roundRectVertical(double x, double y, double w, double h, double radius, int top, int bottom, double borderWidth, int borderColor) {
+        shapes.box(x, y, w, h, radius, radius, radius, radius, top, top, bottom, bottom, borderWidth, borderColor);
+    }
+
+    /**
+     * A box that fades from the left color to the right color.
+     */
+    public void roundRectHorizontal(double x, double y, double w, double h, double radius, int left, int right, double borderWidth, int borderColor) {
+        shapes.box(x, y, w, h, radius, radius, radius, radius, left, right, right, left, borderWidth, borderColor);
+    }
+
+    public void roundRect(WWidget widget, double radius, int color) {
+        roundRect(widget.x, widget.y, widget.width, widget.height, radius, color);
+    }
+
+    /**
+     * A tint over the blurred world behind the box.
+     */
+    public void glass(double x, double y, double w, double h, double radius, int tint, double borderWidth, int borderColor) {
+        shapes.glass(x, y, w, h, radius, radius, radius, radius, tint, borderWidth, borderColor);
+    }
+
+    public void glass(double x, double y, double w, double h, double rTopLeft, double rTopRight, double rBottomRight, double rBottomLeft, int tint, double borderWidth, int borderColor) {
+        shapes.glass(x, y, w, h, rTopLeft, rTopRight, rBottomRight, rBottomLeft, tint, borderWidth, borderColor);
+    }
+
+    /**
+     * A soft shadow for a box with the given bounds, drawn below it.
+     */
+    public void shadow(double x, double y, double w, double h, double radius, double blur, int color) {
+        shapes.shadow(x, y, w, h, radius, blur, color);
+    }
+
+    public void circle(double centerX, double centerY, double radius, int color) {
+        roundRect(centerX - radius, centerY - radius, radius * 2, radius * 2, radius, color);
+    }
+
+    public void line(double x1, double y1, double x2, double y2, double thickness, int color) {
+        shapes.line(x1, y1, x2, y2, thickness, color);
+    }
     public void quad(double x, double y, double width, double height, GuiTexture texture, Color color) {
         rTex.texQuad(x, y, width, height, texture.get(width, height), color);
     }
@@ -246,6 +333,28 @@ public class GuiRenderer {
 
     public void text(String text, double x, double y, Color color, boolean title) {
         texts.add(getOp(textPool, x, y, color).set(text, theme.textRenderer(), title));
+    }
+
+    /**
+     * @param argb the color packed as 0xAARRGGBB
+     */
+    public void text(String text, double x, double y, int argb, boolean title) {
+        TextOperation op = textPool.get();
+        op.set(x, y, argb);
+        texts.add(op.set(text, theme.textRenderer(), title));
+    }
+
+    /**
+     * Draws a GUI icon tinted with the color, packed as 0xAARRGGBB.
+     */
+    public void icon(GuiTexture texture, double x, double y, double width, double height, int argb) {
+        scratchColor.set((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >>> 24);
+        rTex.texQuad(x, y, width, height, texture.get(width, height), scratchColor);
+    }
+
+    public void icon(GuiTexture texture, double x, double y, double width, double height, double rotation, int argb) {
+        scratchColor.set((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >>> 24);
+        rTex.texQuad(x, y, width, height, rotation, texture.get(width, height), scratchColor);
     }
 
     public void texture(double x, double y, double width, double height, double rotation, Texture texture) {
